@@ -1,0 +1,1083 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'"
+    />
+    <title>مدير نظام الطلبات والمخزون</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-ui-state="initializing">
+    <!-- ============================ LOGIN VIEW ============================ -->
+    <div class="login-view" id="login-view">
+      <main class="login-panel">
+        <div class="login-brand">
+          <span class="login-brand-mark" aria-hidden="true">Rx</span>
+          <h1 class="login-title" id="app-title">مدير نظام الطلبات والمخزون</h1>
+          <p class="login-subtitle">نظام إدارة طلبات الأدوية والمخزون</p>
+        </div>
+
+        <!--
+          `role="alert"` + `aria-live` make the safe error message announced as
+          soon as it appears. The region is always present in the DOM and only
+          its text changes, which is what assistive technology expects.
+        -->
+        <p
+          class="login-error"
+          id="login-error"
+          role="alert"
+          aria-live="assertive"
+          hidden
+        ><span id="login-error-message"></span></p>
+
+        <form class="login-form" id="login-form" novalidate>
+          <div class="field">
+            <label class="field-label" for="login-email">البريد الإلكتروني</label>
+            <input
+              class="field-input"
+              id="login-email"
+              name="email"
+              type="email"
+              autocomplete="username"
+              dir="ltr"
+              placeholder="name@example.com"
+              required
+            />
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="login-password">كلمة المرور</label>
+            <!--
+              The password input is NEVER persisted: no value is written to
+              localStorage or any other store, and it is cleared on every failed
+              attempt and on sign-out.
+            -->
+            <div class="password-control">
+              <input
+                class="field-input"
+                id="login-password"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                dir="ltr"
+                required
+              />
+              <button
+                class="password-toggle"
+                id="password-toggle"
+                type="button"
+                aria-pressed="false"
+                aria-controls="login-password"
+              >إظهار</button>
+            </div>
+          </div>
+
+          <button class="button button-primary button-block" id="login-submit" type="submit">
+            <span class="button-label">تسجيل الدخول</span>
+            <span class="button-spinner" id="login-spinner" aria-hidden="true"></span>
+          </button>
+
+          <p class="login-hint">
+            تُدار الصلاحيات على الخادم، ولا تتخذ هذه الواجهة أي قرار صلاحية.
+          </p>
+        </form>
+      </main>
+    </div>
+
+    <!-- ========================== MANAGER SHELL ========================== -->
+    <div class="shell" id="shell-view" hidden>
+      <header class="shell-header">
+        <div class="shell-header-identity">
+          <h2 class="shell-title">مدير نظام الطلبات والمخزون</h2>
+          <p class="shell-subtitle">لوحة إدارة الطلبات والمخزون</p>
+        </div>
+
+        <div class="shell-header-actions">
+          <!--
+            Everything below comes from the SAFE authentication state that Stage 7
+            returns. It is display-only: no control is enabled, hidden or disabled
+            based on these values.
+          -->
+          <div class="identity">
+            <span class="identity-name" id="shell-user-name"></span>
+            <span class="identity-meta" id="shell-user-email"></span>
+            <span class="identity-role" id="shell-user-role"></span>
+          </div>
+          <button class="button button-ghost" id="logout-button" type="button">تسجيل الخروج</button>
+        </div>
+      </header>
+
+      <div class="shell-body">
+        <nav class="sidebar" id="shell-nav" aria-label="أقسام النظام">
+          <ul class="nav-list" id="nav-list">
+            <li>
+              <button class="nav-item is-active" type="button" data-view="dashboard" aria-current="page">
+                <span class="nav-item-text">لوحة التحكم</span>
+              </button>
+            </li>
+            <li>
+              <button class="nav-item" type="button" data-view="users">
+                <span class="nav-item-text">المستخدمون</span>
+              </button>
+            </li>
+            <li>
+              <button class="nav-item" type="button" data-view="medicines">
+                <span class="nav-item-text">الأدوية</span>
+              </button>
+            </li>
+            <li>
+              <button class="nav-item" type="button" data-view="orders">
+                <span class="nav-item-text">طلبات الأدوية</span>
+              </button>
+            </li>
+            <li>
+              <button class="nav-item" type="button" data-view="request-submit">
+                <span class="nav-item-text">إرسال طلب أدوية</span>
+              </button>
+            </li>
+            <!--
+                Stage 12: the orders HISTORY, a separate surface from the Stage 11
+                request queue. The queue shows requests waiting to be processed;
+                this shows the orders that already exist. Keeping them apart stops a
+                manager reading "no requests" as "no orders".
+            -->
+            <li>
+              <button class="nav-item" type="button" data-view="orders-history">
+                <span class="nav-item-text">سجل الطلبات</span>
+              </button>
+            </li>
+            <li>
+              <button class="nav-item" type="button" data-view="my-orders">
+                <span class="nav-item-text">طلباتي المنفَّذة</span>
+              </button>
+            </li>
+            <li>
+              <button class="nav-item" type="button" data-view="stock">
+                <span class="nav-item-text">سجل حركة المخزون</span>
+              </button>
+            </li>
+            <li>
+              <button class="nav-item" type="button" data-view="settings">
+                <span class="nav-item-text">الإعدادات</span>
+              </button>
+            </li>
+          </ul>
+        </nav>
+
+        <main class="shell-content" id="shell-content">
+          <section class="panel" id="dashboard-view">
+            <h3 class="panel-title">لوحة التحكم</h3>
+            <p class="panel-lead" id="dashboard-lead">مرحباً بك في نظام إدارة الطلبات والمخزون.</p>
+
+            <dl class="detail-list">
+              <div class="detail-row">
+                <dt>المستخدم الحالي</dt>
+                <dd id="dashboard-user-name"></dd>
+              </div>
+              <div class="detail-row">
+                <dt>البريد الإلكتروني</dt>
+                <dd id="dashboard-user-email"></dd>
+              </div>
+              <div class="detail-row">
+                <dt>حالة الجلسة</dt>
+                <dd id="dashboard-session-state">مُصادَق عليه</dd>
+              </div>
+              <div class="detail-row">
+                <dt>حالة النظام</dt>
+                <dd id="dashboard-readiness">الأنظمة جاهزة</dd>
+              </div>
+            </dl>
+
+            <section class="card" id="status-card" data-state="loading">
+              <h4 class="card-title">معلومات التشغيل</h4>
+              <p class="status-line">
+                <span class="status-value" id="status-value">جارٍ التحميل…</span>
+              </p>
+              <dl class="info-list" id="info-list"></dl>
+            </section>
+          </section>
+
+          <section class="panel" id="users-view" hidden>
+            <div class="panel-head">
+              <h3 class="panel-title">المستخدمون</h3>
+              <button class="button button-ghost" id="users-refresh" type="button">تحديث</button>
+            </div>
+
+            <!--
+              The count describes what is currently ON SCREEN, not the whole
+              collection: it changes as the search filters the loaded rows. That is
+              what a manager needs to know - whether the filter hid somebody.
+            -->
+            <p class="users-count" id="users-count"></p>
+
+            <div class="users-search">
+              <label class="field-label" for="users-search-input">بحث</label>
+              <input
+                class="field-input"
+                id="users-search-input"
+                type="search"
+                autocomplete="off"
+                placeholder="ابحث بالاسم أو الرقم الوظيفي أو شهر آخر طلب"
+              />
+            </div>
+
+            <!--
+              `data-view-state` drives every visible state of the page. The script
+              only ever sets one of these values, so "loading", "empty", "error",
+              "refreshing" and "saving" can never be confused for one another.
+            -->
+            <div class="users-state" id="users-state" data-view-state="idle">
+              <p class="users-state-message" id="users-state-message"></p>
+              <button class="button button-ghost" id="users-retry" type="button" hidden>إعادة المحاولة</button>
+            </div>
+
+            <div class="users-table-wrap">
+              <table class="users-table">
+                <caption class="visually-hidden">
+                  قائمة المستخدمين وصلاحياتهم وحالة طلباتهم
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">الاسم</th>
+                    <!--
+                      The `users` collection has no email field: the Stage 5B audit
+                      records production documents as {uid, role, name, employeeId,
+                      status}. Inventing an email column would mean showing either a
+                      blank or a guess, so the administrative identifier that DOES
+                      exist is shown instead.
+                    -->
+                    <th scope="col">الرقم الوظيفي</th>
+                    <th scope="col">الدور</th>
+                    <th scope="col">الحالة</th>
+                    <th scope="col">آخر طلب</th>
+                    <th scope="col"><span class="visually-hidden">إجراءات</span></th>
+                  </tr>
+                </thead>
+                <tbody id="users-rows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- ===================== MEDICINES PAGE (Stage 10) =====================
+               The four numbers are rendered exactly as stored. `stock` is NOT
+               computed from `totalInward - totalOutward`: the audit established
+               that `stock` is maintained as an absolute value by the Stage 6
+               processing transaction, and the two counters move on different
+               occasions, so the subtraction is not a valid inventory. -->
+          <section class="panel" id="medicines-view" hidden>
+            <div class="panel-head">
+              <h3 class="panel-title">الأدوية</h3>
+              <button class="button button-ghost" id="medicines-refresh" type="button">تحديث</button>
+            </div>
+
+            <p class="users-count" id="medicines-count"></p>
+
+            <div class="users-search">
+              <label class="field-label" for="medicines-search-input">بحث</label>
+              <input
+                class="field-input"
+                id="medicines-search-input"
+                type="search"
+                autocomplete="off"
+                placeholder="ابحث باسم الدواء"
+              />
+            </div>
+
+            <div class="users-state" id="medicines-state" data-view-state="idle">
+              <p class="users-state-message" id="medicines-state-message"></p>
+              <button class="button button-ghost" id="medicines-retry" type="button" hidden>إعادة المحاولة</button>
+            </div>
+
+            <div class="users-table-wrap">
+              <table class="users-table">
+                <caption class="visually-hidden">
+                  قائمة الأدوية مع المخزون والحد الأقصى للطلب والوارد والمصروف
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">اسم الدواء</th>
+                    <th scope="col">المخزون</th>
+                    <th scope="col">الحد الأقصى</th>
+                    <th scope="col">الوارد</th>
+                    <th scope="col">المصروف</th>
+                    <th scope="col"><span class="visually-hidden">إجراءات</span></th>
+                  </tr>
+                </thead>
+                <tbody id="medicines-rows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- ===================== EMPLOYEE REQUEST SUBMISSION (Stage 16) =====================
+               The employee sends medicine ids and quantities only. Main resolves
+               catalogue names and identity, while the repository sets the pending
+               status, server timestamp and generated request id. -->
+          <section class="panel" id="request-submit-view" hidden>
+            <div class="panel-head">
+              <h3 class="panel-title">إرسال طلب أدوية</h3>
+            </div>
+            <p class="panel-lead">
+              إنشاء الطلب يرسله للمراجعة فقط؛ ولا يعني اعتماده أو معالجته.
+            </p>
+
+            <div class="users-state" id="request-submit-state" data-view-state="idle">
+              <p class="users-state-message" id="request-submit-state-message"></p>
+              <button class="button button-ghost" id="request-submit-retry" type="button" hidden>إعادة تحميل الأدوية</button>
+            </div>
+
+            <div class="users-state" id="request-status-panel" data-view-state="idle" hidden aria-live="polite">
+              <p class="users-state-message" id="request-status-request-id"></p>
+              <p class="users-state-message" id="request-status-message"></p>
+              <button class="button button-ghost" id="request-status-refresh" type="button" disabled>تحديث الحالة</button>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="request-medicine-select">الدواء</label>
+              <select class="field-input" id="request-medicine-select" disabled>
+                <option value="">اختر الدواء</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="request-quantity">الكمية</label>
+              <input class="field-input" id="request-quantity" type="number" min="1" step="1" inputmode="numeric" disabled />
+            </div>
+            <button class="button button-ghost" id="request-add-item" type="button" disabled>إضافة إلى الطلب</button>
+
+            <div class="users-table-wrap">
+              <table class="users-table">
+                <caption class="visually-hidden">الأدوية والكميات في الطلب الجاري</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">الدواء</th>
+                    <th scope="col">الكمية</th>
+                    <th scope="col"><span class="visually-hidden">إجراءات</span></th>
+                  </tr>
+                </thead>
+                <tbody id="request-items"></tbody>
+              </table>
+            </div>
+            <button class="button button-primary" id="request-submit" type="button" disabled>إنشاء الطلب</button>
+          </section>
+
+          <!-- ===================== ORDER REQUESTS PAGE (Stage 11) =====================
+               This page is an ADMINISTRATIVE FRONT END for the Stage 6 processing
+               engine. It computes nothing: no stock figure, no total, no duplicate
+               merge, no eligibility or schedule verdict. Every number shown is a
+               field read straight from the stored request. The single action,
+               `معالجة الطلب`, forwards a request id to Main, which calls the Stage 6
+               service; all W1-W5 writes happen inside that service's transaction. -->
+          <section class="panel" id="orders-view" hidden>
+            <div class="panel-head">
+              <h3 class="panel-title">طلبات الأدوية</h3>
+              <button class="button button-ghost" id="orders-refresh" type="button">تحديث</button>
+            </div>
+
+            <p class="users-count" id="orders-count"></p>
+
+            <div class="users-search">
+              <label class="field-label" for="orders-search-input">بحث</label>
+              <input
+                class="field-input"
+                id="orders-search-input"
+                type="search"
+                autocomplete="off"
+                placeholder="ابحث باسم الموظف أو الدواء"
+              />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="orders-status-filter">تصفية الحالة</label>
+              <select class="field-input" id="orders-status-filter">
+                <option value="all">الكل</option>
+                <option value="pending">قيد الانتظار</option>
+                <option value="processed">تمت المعالجة</option>
+                <option value="failed">فشل</option>
+              </select>
+            </div>
+
+            <div class="users-state" id="orders-state" data-view-state="idle">
+              <p class="users-state-message" id="orders-state-message"></p>
+              <button class="button button-ghost" id="orders-retry" type="button" hidden>إعادة المحاولة</button>
+            </div>
+
+            <div class="users-table-wrap">
+              <table class="users-table">
+                <caption class="visually-hidden">
+                  قائمة طلبات الأدوية مع الموظف وتاريخ الطلب والحالة وعدد الأصناف
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">الموظف</th>
+                    <th scope="col">تاريخ الطلب</th>
+                    <th scope="col">الحالة</th>
+                    <th scope="col">عدد الأصناف</th>
+                    <th scope="col">رقم الطلب الناتج</th>
+                    <th scope="col">تاريخ المعالجة</th>
+                    <th scope="col"><span class="visually-hidden">إجراءات</span></th>
+                  </tr>
+                </thead>
+                <tbody id="orders-rows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- ===================== ORDERS HISTORY PAGE (Stage 12) =====================
+               A READ-ONLY audit surface. It shows orders that already exist in
+               the backend and offers exactly ONE action: refresh. There is no
+               edit, delete, re-process, approve, reject or stock adjustment, and
+               the stage-12 architecture test asserts that no such control is
+               rendered.
+
+               Every field shown is read from the stored order. Nothing is
+               computed: the line column is a COUNT OF LINES, never a sum of
+               quantities, because aggregating duplicates is Stage 6's job and a
+               total here could contradict the order that was actually written. -->
+          <section class="panel" id="orders-history-view" hidden>
+            <div class="panel-head">
+              <h3 class="panel-title">سجل الطلبات</h3>
+              <button class="button button-ghost" id="orders-history-print" type="button">طباعة / PDF</button>
+              <button class="button button-ghost" id="orders-history-refresh" type="button">تحديث</button>
+            </div>
+
+            <div class="orders-history-report-header">
+              <h1 id="orders-history-report-title"></h1>
+              <p id="orders-history-report-generated-at"></p>
+              <p id="orders-history-report-filters"></p>
+              <p id="orders-history-report-count"></p>
+              <p id="orders-history-report-scope"></p>
+              <p id="orders-history-report-empty" hidden></p>
+            </div>
+
+            <p class="users-count" id="orders-history-count"></p>
+
+            <div class="users-search">
+              <label class="field-label" for="orders-history-search-input">بحث</label>
+              <input
+                class="field-input"
+                id="orders-history-search-input"
+                type="search"
+                autocomplete="off"
+                placeholder="ابحث بالاسم أو رقم الموظف أو اسم الدواء"
+              />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="orders-history-status-filter">تصفية الحالة</label>
+              <select class="field-input" id="orders-history-status-filter">
+                <option value="all">الكل</option>
+                <option value="pending">قيد الانتظار</option>
+                <option value="accepted">مقبول</option>
+                <option value="rejected">مرفوض</option>
+              </select>
+            </div>
+
+            <div class="users-state" id="orders-history-state" data-view-state="idle">
+              <p class="users-state-message" id="orders-history-state-message"></p>
+              <button class="button button-ghost" id="orders-history-retry" type="button" hidden>إعادة المحاولة</button>
+            </div>
+
+            <div class="users-table-wrap">
+              <table class="users-table">
+                <caption class="visually-hidden">
+                  سجل الطلبات المنفَّذة: الموظف والتاريخ والشهر والحالة وعدد الأصناف وطلب المصدر
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">الموظف</th>
+                    <th scope="col">رقم الطلب</th>
+                    <th scope="col">التاريخ</th>
+                    <th scope="col">الشهر</th>
+                    <th scope="col">الحالة</th>
+                    <th scope="col">عدد الأصناف</th>
+                    <th scope="col">طلب المصدر</th>
+                    <th scope="col"><span class="visually-hidden">إجراءات</span></th>
+                  </tr>
+                </thead>
+                <tbody id="orders-history-rows"></tbody>
+              </table>
+            </div>
+            <div class="orders-history-pagination" id="orders-history-pagination">
+              <p id="orders-history-load-more-state" role="status" aria-live="polite"></p>
+              <button class="button button-ghost" id="orders-history-load-more" type="button" hidden>تحميل المزيد</button>
+            </div>
+          </section>
+
+          <section class="panel" id="my-orders-view" hidden>
+            <div class="panel-head">
+              <h3 class="panel-title">طلباتي المنفَّذة</h3>
+              <button class="button button-ghost" id="my-orders-print" type="button">طباعة / PDF</button>
+              <button class="button button-ghost" id="my-orders-refresh" type="button">تحديث</button>
+            </div>
+            <div class="my-orders-report-header">
+              <h1 id="my-orders-report-title"></h1>
+              <p id="my-orders-report-generated-at"></p>
+              <p id="my-orders-report-filters"></p>
+              <p id="my-orders-report-count"></p>
+              <p id="my-orders-report-scope"></p>
+              <p id="my-orders-report-empty" hidden></p>
+            </div>
+            <p class="panel-lead">
+              يعرض هذا السجل نافذة محدودة من طلباتك، دون ضمان ترتيب زمني. يُطبق البحث والفلتر فقط على هذه النافذة الحالية، ولا يدل عدم التطابق على غياب الطلب خارجها.
+            </p>
+            <div class="users-toolbar" aria-label="بحث وتصفية طلباتي المنفَّذة">
+              <label class="visually-hidden" for="my-orders-search-input">بحث في طلباتي المنفَّذة</label>
+              <input id="my-orders-search-input" type="search" placeholder="ابحث برقم الطلب أو اسم الدواء" aria-label="ابحث برقم الطلب أو اسم الدواء" />
+              <label class="visually-hidden" for="my-orders-status-filter">تصفية طلباتي المنفَّذة حسب الحالة</label>
+              <select id="my-orders-status-filter" aria-label="تصفية حسب الحالة">
+                <option value="all">كل الحالات</option>
+                <option value="pending">قيد الانتظار</option>
+                <option value="accepted">مقبول</option>
+                <option value="rejected">مرفوض</option>
+              </select>
+              <button class="button button-ghost" id="my-orders-clear-filters" type="button">مسح الفلتر</button>
+            </div>
+            <p class="users-count" id="my-orders-count"></p>
+            <div class="users-state" id="my-orders-state" data-view-state="idle">
+              <p class="users-state-message" id="my-orders-state-message"></p>
+              <button class="button button-ghost" id="my-orders-retry" type="button" hidden>إعادة المحاولة</button>
+            </div>
+            <div class="users-table-wrap">
+              <table class="users-table">
+                <caption class="visually-hidden">نافذة محدودة وغير مرتبة زمنيًا من الطلبات الخاصة بالمستخدم الحالي</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">رقم الطلب</th>
+                    <th scope="col">التاريخ</th>
+                    <th scope="col">الشهر</th>
+                    <th scope="col">الحالة</th>
+                    <th scope="col">عدد البنود</th>
+                    <th scope="col">الأدوية والكميات</th>
+                  </tr>
+                </thead>
+                <tbody id="my-orders-rows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel" id="settings-view" hidden>
+            <!--
+              Stage 13 - the system settings page, and it is READ-ONLY.
+
+              There is NO <form> in this section, and no <input>, <select> or
+              <textarea> either. That is deliberate and it is the strongest form of
+              the guarantee: with no editable control there is nothing on this page
+              a user could change and nothing for a submission to carry. The only
+              controls are the refresh and retry buttons, both `type="button"`.
+
+              The panel is a <dl class="detail-list"> rather than a table because
+              these are labelled values, not rows: the project already uses this
+              exact pair on the dashboard, so no new visual grammar is introduced.
+            -->
+            <div class="panel-head">
+              <h3 class="panel-title">إعدادات النظام</h3>
+              <button class="button button-ghost" id="settings-refresh" type="button">تحديث</button>
+            </div>
+
+            <p class="panel-lead" id="settings-not-configured" hidden>
+              لم تُضبط هذه الإعدادات بعد. القيم أدناه هي القيم الافتراضية التي سيطبّقها نظام معالجة الطلبات، وليست قيمًا مُخزَّنة.
+            </p>
+
+            <div class="users-state" id="settings-state" data-view-state="idle">
+              <p class="users-state-message" id="settings-state-message"></p>
+              <button class="button button-ghost" id="settings-retry" type="button" hidden>إعادة المحاولة</button>
+            </div>
+
+            <dl class="detail-list">
+              <div class="detail-row">
+                <dt>أقل عدد أيام بين الطلبات</dt>
+                <dd id="settings-min-days"></dd>
+              </div>
+              <div class="detail-row">
+                <dt>السماح بطلبات الجمعة</dt>
+                <dd id="settings-friday"></dd>
+              </div>
+              <div class="detail-row">
+                <dt>بداية دوام الطلبات</dt>
+                <dd id="settings-start-time" class="value-ltr"></dd>
+              </div>
+              <div class="detail-row">
+                <dt>نهاية دوام الطلبات</dt>
+                <dd id="settings-end-time" class="value-ltr"></dd>
+              </div>
+
+              <!--
+                The last two are DEAD in the current model: A5 commented the
+                `maxDailyOrders` check out and `assistantId` is administrative
+                only. They are shown, clearly labelled, rather than hidden: a
+                manager who opens the settings screen should be able to see that
+                these values exist AND that they currently drive nothing.
+              -->
+              <div class="detail-row">
+                <dt>الحدّ الأقصى للطلبات اليومية (غير مُفعّل)</dt>
+                <dd id="settings-max-daily"></dd>
+              </div>
+              <div class="detail-row">
+                <dt>معرّف المساعد (غير مُفعّل)</dt>
+                <dd id="settings-assistant" class="value-ltr"></dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="panel" id="stock-view" hidden>
+            <!--
+              Stage 14 - the inventory movement audit trail, and it is READ-ONLY.
+
+              There is NO <form> in this section and no editable control of any kind.
+              The only inputs are the search box and the direction filter, and BOTH
+              act only on rows already loaded: they filter the local array and issue
+              no request. That is the same pattern the orders-history screen uses.
+
+              WHY THE COLUMNS ARE EXACTLY THESE. Every column is a field that exists
+              in the stored document. There is no "balance" column and no totals
+              row, because `quantity` is a positive magnitude in BOTH directions and
+              only the direction column carries the sign - so a total would either
+              need to net the two (which nothing here is allowed to do) or lie.
+
+              WHY NO SORT CONTROL. The REST transport has no `orderBy`, so the rows
+              arrive in whatever order the server returned. A control that reorders
+              them would promise an ordering the backend cannot keep; each row
+              therefore shows its OWN stored timestamp instead.
+            -->
+            <div class="panel-head">
+              <h3 class="panel-title">سجل حركة المخزون</h3>
+              <button class="button button-ghost" id="stock-refresh" type="button">تحديث</button>
+            </div>
+
+            <p class="panel-lead" id="stock-window-note">
+              يعرض نافذة محدودة من حركات المخزون كما خُزِّنت، دون أي ترتيب زمني مضمون ودون أي احتساب للرصيد.
+            </p>
+
+            <p class="users-count" id="stock-count"></p>
+
+            <div class="users-search">
+              <label class="field-label" for="stock-search-input">بحث</label>
+              <input
+                class="field-input"
+                id="stock-search-input"
+                type="search"
+                autocomplete="off"
+                placeholder="ابحث برقم الدواء أو بالوصف أو برقم الطلب"
+              />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="stock-direction-filter">تصفية الاتجاه</label>
+              <select class="field-input" id="stock-direction-filter">
+                <option value="all">الكل</option>
+                <option value="inward">وارد للمخزون</option>
+                <option value="outward">صادر من المخزون</option>
+              </select>
+            </div>
+
+            <div class="users-state" id="stock-state" data-view-state="idle">
+              <p class="users-state-message" id="stock-state-message"></p>
+              <button class="button button-ghost" id="stock-retry" type="button" hidden>إعادة المحاولة</button>
+            </div>
+
+            <div class="users-table-wrap">
+              <table class="users-table">
+                <caption class="visually-hidden">
+                  سجل حركة المخزون: رقم الدواء والوصف والاتجاه والكمية والتاريخ والمنفّذ والمرجع
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">رقم الدواء</th>
+                    <th scope="col">الوصف المخزَّن</th>
+                    <th scope="col">الاتجاه</th>
+                    <th scope="col">الكمية المخزَّنة</th>
+                    <th scope="col">تاريخ الحركة</th>
+                    <th scope="col">المنفّذ</th>
+                    <th scope="col">المرجع</th>
+                  </tr>
+                </thead>
+                <tbody id="stock-rows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel" id="placeholder-view" hidden>
+            <h3 class="panel-title" id="placeholder-title"></h3>
+            <p class="panel-lead">
+              هذا القسم هيكل تنقل فقط في هذه المرحلة، وسيُنفَّذ في مرحلة لاحقة.
+            </p>
+            <p class="panel-note">
+              لا تُنفَّذ أي عملية بيانات من هذا القسم حالياً.
+            </p>
+          </section>
+        </main>
+      </div>
+
+      <footer class="shell-footer">
+        <span>المرحلة الثامنة: واجهة الدخول ولوحة الإدارة — بلا بيانات أعمال.</span>
+      </footer>
+    </div>
+
+    <!-- ====================== USER DETAILS / EDIT DIALOG ======================
+         A `<dialog>` rather than an overlay div: it brings focus trapping, Escape
+         handling and the correct ARIA role from the platform, which is exactly the
+         behaviour a hand-rolled overlay would have to reimplement badly.
+
+         ONLY THE THREE PERMITTED TRANSITIONS ARE EDITABLE HERE. `role`,
+         `employeeId` and the order summary are rendered as plain text because the
+         Stage 5B repository contract provides no method to write them. -->
+    <dialog class="user-dialog" id="user-dialog" aria-labelledby="user-dialog-title">
+      <form class="user-dialog-body" id="user-dialog-form" method="dialog">
+        <header class="user-dialog-head">
+          <h4 class="user-dialog-title" id="user-dialog-title">بيانات المستخدم</h4>
+          <button class="icon-button" id="user-dialog-close" type="button" aria-label="إغلاق">إغلاق</button>
+        </header>
+
+        <p class="user-dialog-error" id="user-dialog-error" role="alert" hidden>
+          <span id="user-dialog-error-message"></span>
+        </p>
+
+        <dl class="detail-list">
+          <!-- Read-only: shown so the manager knows what they are editing. -->
+          <div class="detail-row">
+            <dt>الدور</dt>
+            <dd id="user-detail-role"></dd>
+          </div>
+          <div class="detail-row">
+            <dt>الرقم الوظيفي</dt>
+            <dd id="user-detail-employee-id"></dd>
+          </div>
+          <div class="detail-row">
+            <dt>الحالة</dt>
+            <dd id="user-detail-status"></dd>
+          </div>
+          <div class="detail-row">
+            <dt>آخر طلب</dt>
+            <dd id="user-detail-last-order"></dd>
+          </div>
+          <div class="detail-row">
+            <dt>الاستثناء</dt>
+            <dd id="user-detail-exception"></dd>
+          </div>
+        </dl>
+
+        <!-- The only free-text field the contract permits an administrator to set. -->
+        <div class="field">
+          <label class="field-label" for="user-detail-name">الاسم</label>
+          <input class="field-input" id="user-detail-name" type="text" maxlength="120" autocomplete="off" />
+        </div>
+
+        <p class="user-dialog-note">
+          الحقول الأخرى للعرض فقط ولا يمكن تعديلها من هنا.
+        </p>
+
+        <footer class="user-dialog-actions">
+          <button class="button button-ghost" id="user-approve" type="button">اعتماد</button>
+          <button class="button button-ghost" id="user-reject" type="button">رفض</button>
+          <button class="button button-ghost" id="user-grant-exception" type="button">منح استثناء</button>
+          <button class="button button-ghost" id="user-revoke-exception" type="button">سحب الاستثناء</button>
+          <button class="button button-primary" id="user-save" type="button">حفظ الاسم</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <!-- ==================== MEDICINE DETAILS / EDIT DIALOG ====================
+         TWO WRITES LIVE HERE, AND THEY ARE DELIBERATELY SEPARATE.
+
+         `maxQuantity` is the Stage 10 write: it edits a policy cap and moves no
+         stock, so it needs no audit row. `name`, `stock`, `totalInward` and
+         `totalOutward` have no editable field at all.
+
+         The inbound receipt is the Stage 15 write, added at the bottom of this
+         dialog. It DOES move stock, and it is the reason the reasoning above had to
+         change: this app could not produce the matching `stock_logs` row, so
+         inventory editing was withheld entirely. Stage 15 added the row - inside
+         the same transaction - which is what lets a receipt be offered now. The
+         write mapping and its reasoning are documented beside the transaction in
+         the Main process. -->
+    <dialog class="user-dialog" id="medicine-dialog" aria-labelledby="medicine-dialog-title">
+      <form class="user-dialog-body" id="medicine-dialog-form" method="dialog">
+        <header class="user-dialog-head">
+          <h4 class="user-dialog-title" id="medicine-dialog-title">بيانات الدواء</h4>
+          <button class="icon-button" id="medicine-dialog-close" type="button" aria-label="إغلاق">إغلاق</button>
+        </header>
+
+        <p class="user-dialog-error" id="medicine-dialog-error" role="alert" hidden>
+          <span id="medicine-dialog-error-message"></span>
+        </p>
+
+        <dl class="detail-list">
+          <div class="detail-row">
+            <dt>اسم الدواء</dt>
+            <dd id="medicine-detail-name"></dd>
+          </div>
+          <div class="detail-row">
+            <dt>المخزون</dt>
+            <dd id="medicine-detail-stock"></dd>
+          </div>
+          <div class="detail-row">
+            <dt>الوارد</dt>
+            <dd id="medicine-detail-inward"></dd>
+          </div>
+          <div class="detail-row">
+            <dt>المصروف</dt>
+            <dd id="medicine-detail-outward"></dd>
+          </div>
+        </dl>
+
+        <div class="field">
+          <label class="field-label" for="medicine-detail-max-quantity">الحد الأقصى للطلب</label>
+          <input
+            class="field-input field-number"
+            id="medicine-detail-max-quantity"
+            type="number"
+            step="1"
+            inputmode="numeric"
+          />
+        </div>
+
+        <p class="user-dialog-note">
+          الحد الأقصى هو الحقل الوحيد القابل للتعديل. حقول المخزون والوارد والمصروف تُدار من معالجة الطلبات.
+        </p>
+
+        <!--
+          Stage 15 - the INBOUND RECEIPT.
+
+          ONE numeric field and ONE button, inside this dialog rather than on a page
+          of its own: a receipt is a per-medicine fact, so it belongs beside the
+          medicine it affects rather than in a separate screen that would have to
+          re-establish which drug is meant.
+
+          There is no field for `stock`, `totalInward`, `totalOutward` or `type`.
+          The new balance is an ABSOLUTE value the Main process computes from the
+          stock it reads inside the transaction, and the direction is always an
+          inbound one - so a person could not type a balance, and could not make
+          this a disguised outbound movement even by trying.
+
+          The audit row is not a checkbox or a second button: it is written in the
+          same transaction, which is why this one action can never leave stock
+          moved with nothing to explain it.
+        -->
+        <div class="field">
+          <label class="field-label" for="medicine-detail-inbound-quantity">كمية وارد جديدة</label>
+          <input
+            class="field-input field-number"
+            id="medicine-detail-inbound-quantity"
+            type="number"
+            step="1"
+            min="1"
+            inputmode="numeric"
+            autocomplete="off"
+          />
+        </div>
+
+        <p class="user-dialog-note">
+          تسجيل الوارد يزيد المخزون ويضيف حركة إلى سجل حركة المخزون، ويُحفظ الاثنان معاً أو لا يُحفظ أيٌّ منهما.
+        </p>
+
+        <footer class="user-dialog-actions">
+          <button class="button button-primary" id="medicine-save" type="button">حفظ الحد الأقصى</button>
+          <button class="button button-ghost" id="medicine-add-inbound" type="button">تسجيل وارد</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <!-- ================= ORDER REQUEST DETAILS (Stage 11) =================
+         READ-ONLY by construction: there is not one input in this dialog. The
+         requested quantities are shown exactly as stored; nothing is summed,
+         merged or checked against stock. The failure line, when present, is the
+         business sentence the processing engine committed to the request itself,
+         not a transport error. -->
+    <dialog class="user-dialog" id="order-dialog" aria-labelledby="order-dialog-title">
+      <form class="user-dialog-body" id="order-dialog-form" method="dialog">
+        <header class="user-dialog-head">
+          <h4 class="user-dialog-title" id="order-dialog-title">تفاصيل الطلب</h4>
+          <button class="icon-button" id="order-dialog-close" type="button" aria-label="إغلاق">إغلاق</button>
+        </header>
+
+        <p class="user-dialog-error" id="order-dialog-error" role="alert" hidden>
+          <span id="order-dialog-error-message"></span>
+        </p>
+        <p class="user-dialog-note" id="order-outcome-message" hidden role="status"></p>
+
+        <dl class="detail-list">
+          <div class="detail-row">
+            <dt>الموظف</dt>
+            <dd id="order-detail-employee"></dd>
+          </div>
+          <div class="detail-row">
+            <dt>تاريخ الطلب</dt>
+            <dd id="order-detail-date"></dd>
+          </div>
+          <div class="detail-row">
+            <dt>الحالة</dt>
+            <dd id="order-detail-status"></dd>
+          </div>
+          <div class="detail-row">
+            <dt>رقم الطلب الناتج</dt>
+            <dd id="order-detail-order-id"></dd>
+          </div>
+          <div class="detail-row">
+            <dt>تاريخ المعالجة</dt>
+            <dd id="order-detail-processed-at"></dd>
+          </div>
+          <div class="detail-row">
+            <dt>نفّذها</dt>
+            <dd id="order-detail-processed-by"></dd>
+          </div>
+        </dl>
+
+        <h5 class="user-dialog-subtitle">الأصناف المطلوبة</h5>
+        <table class="users-table">
+          <caption class="visually-hidden">أصناف الطلب وكمياتها كما هي مخزَّنة</caption>
+          <thead>
+            <tr>
+              <th scope="col">الدواء</th>
+              <th scope="col">الكمية</th>
+            </tr>
+          </thead>
+          <tbody id="order-detail-items"></tbody>
+        </table>
+
+        <p class="user-dialog-error" id="order-detail-failure" role="status" hidden>
+          <span id="order-detail-failure-message"></span>
+        </p>
+
+        <p class="user-dialog-note">
+          لا تُعرض هنا أي حسابات للمخزون أو الإجماليات؛ تعالج القواعد في خدمة المعالجة نفسها.
+        </p>
+
+        <footer class="user-dialog-actions">
+          <button class="button button-ghost" id="order-dialog-refresh" type="button">تحديث الحالة</button>
+          <button class="button button-primary" id="order-process" type="button">معالجة الطلب</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <!-- ================= PROCESSING CONFIRMATION (Stage 11) =================
+         Processing commits real inventory writes, so it is confirmed explicitly.
+         The dialog states WHO asked, WHEN, and WHAT was requested - all read
+         from the stored request - and deliberately shows NO estimated stock, no
+         total and no predicted outcome, because the renderer has no way to know
+         any of them and Stage 6 alone decides. -->
+    <dialog class="user-dialog" id="order-confirm-dialog" aria-labelledby="order-confirm-title">
+      <div class="user-dialog-body">
+        <header class="user-dialog-head">
+          <h4 class="user-dialog-title" id="order-confirm-title">تأكيد معالجة الطلب</h4>
+        </header>
+
+        <p class="user-dialog-note">
+          ستتم معالجة الطلب من قِبل خدمة المعالجة، وقد ينتج عن ذلك خصم للأدوية من المخزون.
+        </p>
+
+        <dl class="detail-list">
+          <div class="detail-row">
+            <dt>الموظف</dt>
+            <dd id="order-confirm-employee"></dd>
+          </div>
+          <div class="detail-row">
+            <dt>تاريخ الطلب</dt>
+            <dd id="order-confirm-date"></dd>
+          </div>
+          <div class="detail-row">
+            <dt>عدد الأصناف</dt>
+            <dd id="order-confirm-items"></dd>
+          </div>
+        </dl>
+
+        <p class="user-dialog-note" id="order-confirm-items-detail"></p>
+
+        <footer class="user-dialog-actions">
+          <button class="button button-ghost" id="order-confirm-cancel" type="button">إلغاء</button>
+          <button class="button button-primary" id="order-confirm-accept" type="button">تأكيد المعالجة</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <!-- ===================== ORDERS HISTORY DETAILS (Stage 12 / 19) =====================
+         A `<dialog>`, not an overlay div: it brings focus trapping and Escape-to-
+         close for free.
+
+         There is deliberately NO form, NO save button and NO action of any kind in
+         this          dialog. It is the "show" control for a historical document; its only
+         action closes it, and the movement detail below is read-only. -->
+    <dialog class="user-dialog" id="order-history-dialog" aria-labelledby="order-history-dialog-title">
+      <div class="user-dialog-body">
+        <header class="user-dialog-head">
+          <h4 class="user-dialog-title" id="order-history-dialog-title">تفاصيل الطلب</h4>
+          <button class="icon-button" id="order-history-dialog-close" type="button" aria-label="إغلاق">إغلاق</button>
+        </header>
+
+        <dl class="info-list">
+          <div class="detail-row">
+            <dt>رقم الطلب</dt>
+            <dd id="order-history-detail-id">—</dd>
+          </div>
+          <div class="detail-row">
+            <dt>الموظف</dt>
+            <dd id="order-history-detail-employee">—</dd>
+          </div>
+          <div class="detail-row">
+            <dt>التاريخ</dt>
+            <dd id="order-history-detail-date">—</dd>
+          </div>
+          <div class="detail-row">
+            <dt>الشهر</dt>
+            <dd id="order-history-detail-month">—</dd>
+          </div>
+          <div class="detail-row">
+            <dt>الحالة</dt>
+            <dd id="order-history-detail-status">—</dd>
+          </div>
+          <div class="detail-row">
+            <dt>طلب استثنائي</dt>
+            <dd id="order-history-detail-exception">—</dd>
+          </div>
+          <div class="detail-row">
+            <dt>طلب المصدر</dt>
+            <dd id="order-history-detail-request">—</dd>
+          </div>
+        </dl>
+
+        <table class="users-table">
+          <caption class="visually-hidden">أصناف الطلب كما خُزِّنت وقت الكتابة</caption>
+          <thead>
+            <tr>
+              <th scope="col">الدواء</th>
+              <th scope="col">الكمية</th>
+            </tr>
+          </thead>
+          <tbody id="order-history-detail-items"></tbody>
+        </table>
+
+        <section class="panel" aria-labelledby="order-history-movements-title">
+          <h5 class="panel-title" id="order-history-movements-title">حركات المخزون المرتبطة بالطلب</h5>
+          <div class="users-state" id="order-history-movements-state" data-view-state="idle" aria-live="polite">
+            <p class="users-state-message" id="order-history-movements-state-message"></p>
+          </div>
+          <div class="users-table-wrap" id="order-history-movements-table-wrap" hidden>
+            <table class="users-table">
+              <caption class="visually-hidden">حقول حركات المخزون المخزّنة للطلب المحدد</caption>
+              <thead>
+                <tr>
+                  <th scope="col">معرّف الحركة</th>
+                  <th scope="col">معرّف الدواء</th>
+                  <th scope="col">الوصف المخزّن</th>
+                  <th scope="col">الاتجاه</th>
+                  <th scope="col">الكمية المخزّنة</th>
+                  <th scope="col">التاريخ المخزّن</th>
+                  <th scope="col">UID المنفّذ</th>
+                  <th scope="col">معرّف الطلب</th>
+                  <th scope="col">معرّف طلب المصدر</th>
+                </tr>
+              </thead>
+              <tbody id="order-history-movements-rows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <p class="user-dialog-note">
+          عرض فقط: هذا الطلب مُنشأ بالفعل في النظام ولا يمكن تعديله من هنا.
+        </p>
+      </div>
+    </dialog>
+
+    <script src="renderer.js" defer></script>
+  </body>
+</html>

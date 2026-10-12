@@ -1,0 +1,114 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      // Fetch user document from the 'users' collection
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      // Check if user has 'admin' or 'assistant' role in their user document
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             (getUserData().role == 'admin' || getUserData().role == 'assistant');
+    }
+
+    function isApproved() {
+      // Check if the user's account has been approved by an admin
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             getUserData().status == 'approved';
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // --- Collection Rules ---
+
+    // Users: Profiles and roles
+    match /users/{userId} {
+      // Employees can read their own profile; admins/assistants can read all
+      allow read: if isOwner(userId) || isAdmin();
+
+      // New users can create their own profile as 'employee' and 'pending'
+      allow create: if isOwner(userId) &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.role == 'employee' &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.hasException == false;
+
+      // Admins can update any user profile.
+      // Employees can update their own profile, but ONLY fields ['name', 'status']. They CANNOT change role, employeeId, uid, hasException, or any lastOrder* field.
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'status']) &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.employeeId == resource.data.employeeId &&
+        request.resource.data.uid == resource.data.uid &&
+        (
+          request.resource.data.status == resource.data.status ||
+          (resource.data.status == 'rejected' && request.resource.data.status == 'pending')
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // Medicines: Inventory management
+    match /medicines/{medicineId} {
+      // Authenticated users can read medicine catalog
+      allow read: if isAuthenticated();
+
+      // Only admins/assistants can create, update, or delete medicines/stock
+      allow write: if isAdmin();
+    }
+
+    // Orders: Finalized medicine orders
+    match /orders/{orderId} {
+      // Users can read their own orders; admins/assistants can read all
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+
+      // Only admins/assistants can create, update, or delete orders
+      allow write: if isAdmin();
+    }
+
+    // Stock Logs: Audit trail for inventory movements
+    match /stock_logs/{logId} {
+      // Only admins/assistants can read, create, update, or delete stock logs
+      allow read, write: if isAdmin();
+    }
+
+    // Order Requests: Trusted submission path for employee orders
+    match /order_requests/{requestId} {
+      // Employees can read their own requests to monitor status; admins/assistants can read all
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.uid == request.auth.uid);
+
+      // Approved employees can create new pending requests for themselves
+      allow create: if isApproved() &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.items is list &&
+        request.resource.data.keys().hasOnly(['uid', 'items', 'status', 'requestDate']);
+
+      // Only admins/assistants can update or delete requests
+      allow update, delete: if isAdmin();
+    }
+
+    // Settings: System configuration
+    match /settings/{docId} {
+      // Authenticated users can read settings (e.g. operational schedule)
+      allow read: if isAuthenticated();
+
+      // Only admins/assistants can update settings
+      allow write: if isAdmin();
+    }
+  }
+}

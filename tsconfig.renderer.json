@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ES2022",
+    "rootDir": "src/renderer",
+    "outDir": "dist/renderer",
+    "types": [],
+    "sourceMap": true,
+    "removeComments": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitAny": true,
+    "useUnknownInCatchVariables": true,
+    "noEmitOnError": true
+  },
+  "include": ["src/renderer/**/*.ts"]
+}

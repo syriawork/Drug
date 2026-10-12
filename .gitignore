@@ -1,0 +1,29 @@
+# Dependencies (installed locally)
+node_modules/
+
+# Isolated emulator laboratory: tools + logs are never committed
+emulator-lab/tools/node_modules/
+emulator-lab/tools/*.log
+emulator-lab/tools/install.done
+emulator-lab/artifacts/
+
+# Runtime logs the emulators and installers write at the project root
+/firestore-debug.log
+/ui-debug.log
+/build.log
+/npm-install.log
+/electron-install.log
+/build.done
+
+# Emulator runtime logs written inside the isolated lab
+/emulator-lab/*.log
+
+# Build output
+dist/
+
+# Editor / OS noise
+.vscode/*
+!.vscode/settings.json
+.idea/
+Thumbs.db
+Desktop.ini

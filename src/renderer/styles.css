@@ -1,0 +1,1091 @@
+/* ===========================================================================
+   Stage 8 - the application shell stylesheet.
+
+   NO FRAMEWORK AND NO REMOTE ASSET. Every rule is hand-written here, the only
+   fonts are ones already installed on Windows, and nothing is fetched: the
+   Content-Security-Policy forbids it anyway (`default-src 'none'`,
+   `font-src 'self'`).
+
+   DESIGN TOKENS
+   The `:root` block below is the single place a colour, a radius or a spacing
+   step is defined. Changing the palette is a matter of editing those variables
+   rather than hunting through selectors.
+
+   RIGHT-TO-LEFT
+   The document direction is `rtl`, so a flex row lays out right-to-left with no
+   extra rules: the first child in the markup is the first child on screen. The
+   sidebar therefore needs no `order`, no `float` and no left/right overrides,
+   which is what keeps it correct when the direction is ever revisited.
+
+   MOTION
+   There is no transition on anything except a subtle button hover. A management
+   application is used for long stretches, and an animated shell is a distraction
+   rather than an aid.
+   =========================================================================== */
+
+:root {
+  --color-canvas: #eef1f6;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f6f8fb;
+  --color-border: #d5dde8;
+  --color-border-strong: #b9c5d4;
+
+  --color-text: #16202e;
+  --color-text-muted: #55637a;
+  --color-text-inverse: #ffffff;
+
+  --color-accent: #0f6b4f;
+  --color-accent-hover: #0b5741;
+  --color-accent-soft: #e4f1ec;
+
+  --color-danger: #97231f;
+  --color-danger-soft: #fbeceb;
+  --color-danger-border: #e7b6b3;
+
+  --color-focus: #1b62c9;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --font-body: "Segoe UI", "Tahoma", "Arial", sans-serif;
+  --font-mono: "Consolas", "Courier New", monospace;
+
+  --shadow-sm: 0 1px 2px rgba(22, 32, 46, 0.06);
+  --shadow-md: 0 6px 20px rgba(22, 32, 46, 0.09);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  direction: rtl;
+  text-align: right;
+  background-color: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  /* Arabic glyphs need more leading than Latin to stay legible. */
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  line-height: 1.4;
+}
+
+/*
+ * Focus is never removed, only restyled. A visible ring is the single cheapest
+ * accessibility win on a form-heavy screen, and `outline-offset` keeps it
+ * readable against both the light inputs and the accent buttons.
+ */
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* ===========================================================================
+   LOGIN
+   =========================================================================== */
+
+.login-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-5);
+  background: linear-gradient(160deg, #eaf1ee 0%, var(--color-canvas) 55%, #e8ecf4 100%);
+}
+
+.login-panel {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--space-6);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.login-brand {
+  text-align: center;
+  margin-bottom: var(--space-5);
+}
+
+.login-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-md);
+  background-color: var(--color-accent);
+  color: var(--color-text-inverse);
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  /* The mark is Latin text inside an RTL block; pin its own direction so the
+     letters never get reordered by the surrounding context. */
+  direction: ltr;
+}
+
+.login-title {
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.login-subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.login-error {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.login-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.field-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.field-input {
+  width: 100%;
+  padding: 10px var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 15px;
+}
+
+/*
+ * The email and password fields are `dir="ltr"` in the markup because their
+ * contents are Latin. With an RTL paragraph, an un-pinned input would place the
+ * caret on the wrong side; the text alignment is corrected here to match.
+ */
+.field-input[dir="ltr"] {
+  text-align: left;
+}
+
+.field-input:disabled {
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.password-control {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.password-control .field-input {
+  flex: 1 1 auto;
+}
+
+.password-toggle {
+  flex: 0 0 auto;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-muted);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  background-color: var(--color-accent-soft);
+}
+
+.login-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+/* ===========================================================================
+   BUTTONS
+   =========================================================================== */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 10px var(--space-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button-block {
+  width: 100%;
+  padding-block: 11px;
+}
+
+.button-primary {
+  background-color: var(--color-accent);
+  color: var(--color-text-inverse);
+}
+
+.button-primary:hover:not(:disabled) {
+  background-color: var(--color-accent-hover);
+}
+
+.button-ghost {
+  background-color: var(--color-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.button-ghost:hover:not(:disabled) {
+  background-color: var(--color-surface-muted);
+}
+
+/*
+ * A disabled control must LOOK unavailable, not merely refuse clicks. The
+ * `cursor` change alone is not perceivable for keyboard users, so the muted fill
+ * carries the meaning.
+ */
+.button:disabled {
+  background-color: var(--color-surface-muted);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.button-spinner {
+  display: none;
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: var(--color-text-inverse);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+body[data-ui-state="authenticating"] #login-spinner {
+  display: inline-block;
+}
+
+/*
+ * `prefers-reduced-motion` removes the animation rather than merely slowing it.
+ * A spinner that keeps spinning for a user who has asked for less motion is a
+ * direct contradiction of that request; the text label still reports progress.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .button-spinner {
+    animation: none;
+    border-top-color: var(--color-text-muted);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===========================================================================
+   MANAGER SHELL
+   =========================================================================== */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.shell[hidden],
+.login-view[hidden] {
+  display: none;
+}
+
+.shell-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.shell-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.shell-subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.shell-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/*
+ * The identity block is information only. Nothing in the shell reads these
+ * values to decide what may be used - the backend rules do that.
+ */
+.identity {
+  display: grid;
+  gap: 0;
+  text-align: start;
+}
+
+.identity-name {
+  font-weight: 700;
+}
+
+.identity-meta,
+.identity-role {
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+}
+
+.shell-body {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: stretch;
+}
+
+.sidebar {
+  flex: 0 0 232px;
+  padding: var(--space-4) var(--space-3);
+  background-color: var(--color-surface);
+  border-inline-end: 1px solid var(--color-border);
+}
+
+.nav-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 9px var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 15px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background-color: var(--color-surface-muted);
+}
+
+.nav-item.is-active {
+  background-color: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.nav-item-text {
+  flex: 1 1 auto;
+}
+
+/* Marks the entries that are navigation-only in this stage. */
+.nav-item-tag {
+  flex: 0 0 auto;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.shell-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-5);
+}
+
+.panel {
+  max-width: 900px;
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+.panel-title {
+  margin-bottom: var(--space-2);
+  font-size: 20px;
+}
+
+.panel-lead {
+  margin: 0 0 var(--space-5);
+  color: var(--color-text-muted);
+}
+
+.panel-note {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3);
+  border-inline-start: 3px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-accent-soft);
+  font-size: 14px;
+}
+
+.detail-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-5);
+  padding: var(--space-4);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-surface-muted);
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row dt {
+  min-width: 150px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.detail-row dd {
+  margin: 0;
+}
+
+.shell-footer {
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+/* ===========================================================================
+   STATUS CARD
+   =========================================================================== */
+
+.card {
+  padding: var(--space-4);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.card-title {
+  margin-bottom: var(--space-3);
+  font-size: 16px;
+}
+
+.status-line {
+  margin: 0 0 var(--space-3);
+}
+
+.status-value {
+  display: inline-block;
+  padding: 4px var(--space-3);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+#status-card[data-state="loading"] .status-value {
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+#status-card[data-state="error"] .status-value {
+  border-color: var(--color-danger-border);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.info-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+
+.info-list dt {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.info-list dd {
+  margin: 0;
+  /* The values are technical identifiers, so they read left-to-right even in an
+     RTL document. */
+  direction: ltr;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+/*
+ * Available to assistive technology, invisible on screen. Used for the table
+ * caption and for column headers whose visible label is only an icon.
+ */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ===========================================================================
+   RESPONSIVE
+   The window is resizable, so the shell reflows rather than clipping. Below the
+   narrow breakpoint the sidebar becomes a horizontal strip above the content,
+   which keeps every navigation entry reachable without a hamburger menu.
+   =========================================================================== */
+
+@media (max-width: 860px) {
+  .shell-body {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    flex: 0 0 auto;
+    border-inline-end: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .nav-list {
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    overflow-x: auto;
+  }
+
+  .nav-item {
+    white-space: nowrap;
+  }
+
+  .shell-header {
+    align-items: flex-start;
+  }
+
+  .detail-row dt {
+    min-width: 0;
+  }
+}
+/* ===========================================================================
+   USERS PAGE (Stage 9)
+
+   THE LONG-VALUE PROBLEM
+   Arabic names and Latin employee ids are both unbounded in practice, and this is
+   the screen where that bites. Three rules keep one long value from destroying the
+   layout:
+     - the table lives inside a horizontally scrollable wrapper, so a wide row
+       scrolls instead of forcing the whole panel to grow;
+     - `text-overflow: ellipsis` plus `title` keeps the CELL readable while
+       letting the full value remain available on hover;
+     - no column is given a fixed width that a long name could blow through.
+
+   `table-layout: fixed` is what makes the ellipsis actually work: without it the
+   browser sizes columns to content and the widest cell wins.
+   =========================================================================== */
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.panel-head .panel-title {
+  margin-bottom: 0;
+}
+
+.button-small {
+  padding: 4px var(--space-3);
+  font-size: 13px;
+}
+
+.users-count {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.users-search {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 420px;
+  margin-bottom: var(--space-4);
+}
+
+.users-state {
+  margin-bottom: var(--space-3);
+}
+
+/*
+ * The state block is only visible while it has something to say. `data-view-state`
+ * drives visibility so "loading" and "refreshing" can show a message WITHOUT
+ * hiding the table - the manager keeps their place in the list.
+ */
+.users-state[data-view-state="idle"],
+.users-state[data-view-state="ready"] {
+  display: none;
+}
+
+.users-state-message {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-3);
+  border-inline-start: 3px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.users-state[data-view-state="error"] .users-state-message {
+  border-inline-start-color: var(--color-danger);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.users-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.users-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.users-table th,
+.users-table td {
+  padding: var(--space-3);
+  text-align: start;
+  border-bottom: 1px solid var(--color-surface-muted);
+}
+
+.users-table th {
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.users-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.users-table tbody tr:hover {
+  background-color: var(--color-accent-soft);
+}
+
+/* The name and the id are the two unbounded columns; both may ellipsis. */
+.users-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.users-table th:nth-child(1),
+.users-table td:nth-child(1) {
+  width: 24%;
+}
+
+.users-table th:nth-child(2),
+.users-table td:nth-child(2) {
+  width: 18%;
+}
+
+/* Technical identifiers stay left-to-right inside the RTL table. */
+.users-table .cell-id {
+  direction: ltr;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+/*
+ * Inventory figures are numbers. They stay left-to-right so a multi-digit value
+ * reads naturally, and use the tabular font so a column of them aligns. Nothing
+ * here derives a figure - every value is printed exactly as stored.
+ */
+.users-table .cell-number {
+  direction: ltr;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.field-number {
+  max-width: 140px;
+}
+
+.my-orders-report-header {
+  display: none;
+}
+
+.orders-history-report-header {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  #my-orders-view,
+  #my-orders-view * {
+    visibility: visible !important;
+  }
+
+  #my-orders-view {
+    position: absolute;
+    inset: 0;
+    display: block !important;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  #my-orders-view .panel-head,
+  #my-orders-view .panel-lead,
+  #my-orders-view .users-toolbar,
+  #my-orders-view .users-count,
+  #my-orders-view .users-state {
+    display: none !important;
+  }
+
+  .my-orders-report-header {
+    display: block;
+    margin-bottom: 20px;
+  }
+
+  .my-orders-report-header h1 {
+    font-size: 22px;
+  }
+
+  #my-orders-view .users-table-wrap {
+    overflow: visible;
+    border: 0;
+    box-shadow: none;
+  }
+
+  #my-orders-view .users-table {
+    table-layout: auto;
+  }
+
+  #my-orders-view .users-table td {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  body[data-print-view="orders-history"] #orders-history-view,
+  body[data-print-view="orders-history"] #orders-history-view * {
+    visibility: visible !important;
+  }
+
+  body[data-print-view="orders-history"] #my-orders-view,
+  body[data-print-view="orders-history"] #my-orders-view * {
+    visibility: hidden !important;
+  }
+
+  body[data-print-view="orders-history"] #orders-history-view {
+    position: absolute;
+    inset: 0;
+    display: block !important;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  body[data-print-view="orders-history"] #orders-history-view .panel-head,
+  body[data-print-view="orders-history"] #orders-history-view .users-search,
+  body[data-print-view="orders-history"] #orders-history-view > .field,
+  body[data-print-view="orders-history"] #orders-history-view .users-count,
+  body[data-print-view="orders-history"] #orders-history-view .users-state {
+    display: none !important;
+  }
+
+  .orders-history-report-header {
+    display: block;
+    margin-bottom: 20px;
+  }
+
+  .orders-history-report-header h1 {
+    font-size: 22px;
+  }
+
+  body[data-print-view="orders-history"] #orders-history-view .users-table-wrap {
+    overflow: visible;
+    border: 0;
+    box-shadow: none;
+  }
+
+  body[data-print-view="orders-history"] #orders-history-view .users-table {
+    table-layout: auto;
+  }
+
+  body[data-print-view="orders-history"] #orders-history-view .users-table td {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  body[data-print-view="orders-history"] #orders-history-view .users-table th:last-child,
+  body[data-print-view="orders-history"] #orders-history-view .users-table td:last-child {
+    display: none !important;
+  }
+
+  body[data-print-view="orders-history"] #orders-history-pagination {
+    display: none !important;
+  }
+
+  @page {
+    margin: 16mm;
+  }
+}
+
+/* =========================================================================== 
+   USER DIALOG (Stage 9)
+   =========================================================================== */
+
+.user-dialog {
+  width: min(560px, calc(100vw - 48px));
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-md);
+}
+
+.user-dialog::backdrop {
+  background-color: rgba(22, 32, 46, 0.45);
+}
+
+.user-dialog-body {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-5);
+}
+
+.user-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.user-dialog-title {
+  font-size: 18px;
+}
+
+.icon-button {
+  padding: 4px var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-muted);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background-color: var(--color-accent-soft);
+}
+
+.user-dialog-error {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.user-dialog .detail-list {
+  margin: 0;
+}
+
+.user-dialog-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.user-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-surface-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   Stage 12 - the orders HISTORY page.
+
+   These rules are presentational only, and the reason each one exists is worth
+   recording: the history is an AUDIT trail, so it must never be mistaken for an
+   editable surface. There is deliberately NO accent-coloured, primary or
+   danger-toned control here - only the ghost button that opens the read-only
+   dialog - so nothing on this page looks like something that would write.
+   --------------------------------------------------------------------------- */
+
+#orders-history-view .panel-lead {
+  margin: 0;
+}
+
+/* The stored ISO timestamp and the stored month both render in a monospaced
+   face so a manager comparing two rows can align them by eye. The value is
+   still rendered exactly as stored - this only changes how it is drawn. */
+#orders-history-rows td:nth-child(2),
+#orders-history-rows td:nth-child(3),
+#orders-history-rows td:nth-child(4),
+#order-history-detail-id,
+#order-history-detail-date,
+#order-history-detail-month {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The item-count column is a COUNT of lines, not a quantity total, so it is
+   centred and kept visually narrow to discourage reading it as a sum. */
+#orders-history-rows td.cell-number {
+  text-align: center;
+}
+
+/* The "view" control is ghost-styled, matching the read-only intent; it is
+   never promoted to a primary button. */
+#orders-history-rows .button-ghost {
+  padding: var(--space-1) var(--space-3);
+  font-size: 13px;
+}
+
+/* The detail table inside the dialog is narrower than the page table, so its
+   columns are not forced into the wide page layout. */
+#order-history-dialog .users-table td:nth-child(2) {
+  text-align: center;
+  width: 5rem;
+}
+}
+
+/* Stage 13 - the settings page.
+
+   The values `06:00` and an assistant id are LTR strings shown inside an RTL
+   document. Without an explicit direction the browser reorders their characters
+   by the bidi algorithm and `06:00` reads as `00:06`, which would show a manager
+   a time the system never stored. The direction is set here rather than inline
+   so the markup stays free of presentational attributes. */
+.value-ltr {
+  direction: ltr;
+  /* `direction` sets the base direction of the box, but the value still shares a
+     bidi paragraph with the Arabic label beside it. Isolating the run keeps the
+     algorithm from pairing the trailing digits with neighbouring strong
+     characters, which is what would turn `EMP-777` into `777-EMP`. */
+  unicode-bidi: isolate;
+  text-align: start;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The "not configured" banner is advisory, not an error: the values below it are
+   the fallbacks the processing step really does apply, so it must not borrow the
+   error colour and alarm a manager about a perfectly working system. */
+#settings-not-configured {
+  color: var(--color-text-muted);
+  border-inline-start: 3px solid var(--color-border-strong);
+  padding-inline-start: var(--space-3);
+}

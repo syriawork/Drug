@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "CommonJS",
+    "rootDir": ".",
+    "outDir": "dist",
+    "types": ["node"],
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitAny": true,
+    "useUnknownInCatchVariables": true,
+    "noEmitOnError": true
+  },
+  "include": ["electron/**/*.ts", "tests/**/*.ts", "src/shared/**/*.d.ts"],
+  "exclude": ["node_modules", "dist", "src/renderer"]
+}
