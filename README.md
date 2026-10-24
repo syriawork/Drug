@@ -176,6 +176,7 @@ repositories/                 واجهات المستودعات وتنفيذها
     auth-architecture.md            معمارية المصادقة (Stage 2)
     firestore-rest-architecture.md  معمارية Firestore REST وقواعد الأمان (Stage 3)
     domain-data-architecture.md     تدقيق طبقة المجال (Stage 4) + تنفيذ Stage 5B (§15)
+    stage23-orders-history-pagination.md  تدقيق ترقيم صفحات سجل الطلبات الإداري (Stage 23)
 ```
 
 ## ما هو غير مُنفَّذ بعد (بشكل مقصود)
@@ -264,3 +265,5 @@ drug-manager/
 ## Stage 23: صفحات إضافية لسجل المدير
 
 يقرأ سجل المدير أول صفحة بحد أقصى 500 طلب، ثم يتيح **تحميل المزيد** عند الطلب. يحتفظ Main Process برمز الاستمرار ولا يرسله إلى Renderer؛ وتبقى عوامل البحث والحالة محلية على جميع الصفحات المحمّلة. يبدأ التحديث نافذة جديدة، ويحافظ فشل الصفحة التالية على النتائج السابقة ويسمح بإعادة المحاولة. لا يضمن Firestore REST ترتيبًا زمنيًا أو لقطة متسقة بين الصفحات؛ لذلك تقتصر الطباعة على البيانات المحمّلة حاليًا. للتحقق: `npm run test:stage23` مع `npm run test:stage12`, `npm run test:stage19`, `npm run test:stage20`, `npm run test:stage21`, و`npm run test:stage22`.
+
+التفاصيل المعمارية الكاملة — ملكية رمز الاستمرار، حارس المالك، حماية الحلقة اللانهائية، وخريطة الأخطاء — في `docs/stage23-orders-history-pagination.md`.
