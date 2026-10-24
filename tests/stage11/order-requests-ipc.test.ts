@@ -124,7 +124,11 @@ describe('Stage 11 requirement 1: the queue and the single read are NAMED channe
     // Stage 12 adds `orders.list`, the READ-ONLY history read. `process` remains
     // the only WRITE on this namespace - the audit surface added a read, not a
     // second way to change an order.
-    assert.deepEqual(Object.keys(api['orders'] as object).sort(), ['list', 'myHistory', 'process']);
+    //
+    // Stage 23 adds `orders.loadMore`, a second READ-ONLY history read that
+    // continues the Main-owned cursor. Like `orders.list` it takes no payload,
+    // so the namespace still holds exactly one write verb.
+    assert.deepEqual(Object.keys(api['orders'] as object).sort(), ['list', 'loadMore', 'myHistory', 'process']);
     for (const forbidden of ['invoke', 'send', 'sendSync', 'on', 'once', 'postMessage', 'ipcRenderer']) {
       assert.equal(api[forbidden], undefined, `the bridge must not expose ${forbidden}`);
     }

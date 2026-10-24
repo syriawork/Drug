@@ -46,7 +46,9 @@ describe('Stage 17 personal order history IPC', () => {
     await api.orders.myHistory();
 
     assert.deepEqual(calls, [{ channel: IPC_CHANNELS.ordersMyHistory, args: [] }]);
-    assert.deepEqual(Object.keys(api.orders).sort(), ['list', 'myHistory', 'process']);
+    // Stage 23 adds `orders.loadMore`, a second READ-ONLY history operation that
+    // continues the Main-owned cursor. It adds no write verb to this namespace.
+    assert.deepEqual(Object.keys(api.orders).sort(), ['list', 'loadMore', 'myHistory', 'process']);
   });
 
   it('delegates to the application operation and uses trusted session identity despite hostile payload', async () => {

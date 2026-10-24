@@ -205,6 +205,10 @@ describe('ipc bridge', () => {
       // Stage 12 adds one READ-ONLY channel. Nothing else about the surface
       // changed: no new top-level namespace, no new write.
       IPC_CHANNELS.ordersList,
+      // Stage 23 adds one more READ-ONLY channel: the Main-owned cursor that
+      // continues the history one page further. It still takes no payload and
+      // adds no write verb.
+      IPC_CHANNELS.ordersHistoryLoadMore,
       // Stage 17 adds one payload-free, owner-scoped read.
       IPC_CHANNELS.ordersMyHistory,
       // Stage 14 adds the read-only movement audit channels, and Stage 19 adds

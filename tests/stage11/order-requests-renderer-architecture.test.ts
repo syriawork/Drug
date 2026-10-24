@@ -337,19 +337,24 @@ describe('Stage 11 requirement 17: the renderer holds no Stage 6 algorithm', () 
     }
   });
 
-  it('reaches the orders module only through its four named operations', () => {
+  it('reaches the orders module only through its named operations', () => {
     const code = readCode(join('src', 'renderer', 'renderer.ts'));
 
     // `readCode` lower-cases, so the extracted operations are lower-case too.
     const used = [...code.matchAll(/api\.(\w+)\.(\w+)\(/g)].map((match) => `${match[1]}.${match[2]}`);
     // Stage 16 adds only the named employee submission operation. Processing
     // remains the distinct Stage 11 operation; no generic write is allowed.
+    //
+    // Stage 23 adds `orders.loadmore`, the READ-ONLY operation that continues
+    // the Main-owned history cursor. It is a read, so the namespace still holds
+    // exactly one write verb.
     const allowed = new Set([
       'orderrequests.list',
       'orderrequests.get',
       'orderrequests.submit',
       'orders.process',
       'orders.list',
+      'orders.loadmore',
       'orders.myhistory',
     ]);
 
