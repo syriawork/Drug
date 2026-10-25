@@ -654,8 +654,14 @@ export class FakeSettingsRepository {
     return this.settings;
   }
 
-  public async saveAppSettings(): Promise<void> {
-    throw new Error('Stage 7 exposes no settings write');
+  public lastSaved: AppSettings | null = null;
+
+  public async saveAppSettings(settings: AppSettings): Promise<void> {
+    this.calls += 1;
+    this.lastSaved = settings;
+    if (this.failure !== null) {
+      throw this.failure;
+    }
   }
 }
 

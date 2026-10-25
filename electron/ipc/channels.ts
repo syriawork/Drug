@@ -23,6 +23,7 @@ export const IPC_CHANNELS = {
   // catalogue snapshots and repository-owned request metadata.
   orderRequestsSubmit: 'drug-manager:order-requests:submit',
   settingsGet: 'drug-manager:settings:get',
+  settingsSave: 'drug-manager:settings:save',
   ordersProcess: 'drug-manager:orders:process',
   // Stage 12: the READ-ONLY history/audit read.
   //

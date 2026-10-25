@@ -1,27 +1,29 @@
 /**
  * Stage 13 - the System Settings IPC contract.
  *
- * Stage 13 adds NO CHANNEL. The settings page is read-only, so there is no
- * `settings.save` to add, no `settings.update`, no `settings.delete`. That
- * absence is the whole contract, and it is the thing most easily lost to a
- * well-meaning later edit, so most of this file asserts it rather than asserting
- * behaviour that a new channel would have had.
+ * Stage 13 adds TWO channels: `settings.get` (payload-free read) and
+ * `settings.save` (takes an `AppSettingsViewDraft`). That pair is the whole
+ * settings contract, and it is the thing most easily lost to a well-meaning
+ * later edit, so most of this file asserts it rather than asserting behaviour
+ * that a new channel would have had.
  *
  * WHAT THIS FILE PROVES
  *
- *  - `settings.get` is the ONLY settings channel, and it takes NO payload. There
- *    is nothing on it for a hostile renderer to aim: no document, no field, no
+ *  - `settings.get` is the read channel, and it takes NO payload. There is
+ *    nothing on it for a hostile renderer to aim: no document, no field, no
  *    mask, no filter.
- *  - the preload method is declared with zero parameters, so a call that tried to
- *    pass one would not compile;
- *  - the transport arity is exactly one argument-free invoke;
- *  - the registered handler ignores any payload it is handed;
- *  - no registered channel on the settings namespace can WRITE.
+ *  - `settings.save` is the write channel, and it takes an `AppSettingsViewDraft`
+ *    containing exactly four editable fields: `minDaysBetweenOrders`,
+ *    `allowFridayOrders`, `startTime`, `endTime`. The dead fields are never sent.
+ *  - the preload methods are declared with their exact parameter counts, so a
+ *    call that tried to pass extra arguments would not compile;
+ *  - the transport arity is exactly one invoke per channel;
+ *  - the registered handlers read only what they are handed;
+ *  - no registered channel on the settings namespace can WRITE beyond
+ *    `settings.save`.
  *
- * The read-only claim is stated precisely: this suite proves there is no settings
- * WRITE PATH exposed to the renderer through these channels. Firestore Rules and
- * the emulator suite cover what the server refuses; those are separate concerns
- * and neither is assumed here.
+ * Firestore Rules and the emulator suite cover what the server refuses; those
+ * are separate concerns and neither is assumed here.
  *
  * No network, no Electron runtime, no production backend.
  */
@@ -224,5 +226,94 @@ describe('Stage 13 requirement 11: the settings namespace cannot write', () => {
     const settings = new FakeSettingsRepository(STORED);
     await handlersOver(settings)[IPC_CHANNELS.settingsGet]?.({}, {});
     assert.equal(settings.calls, 1, 'reading must not touch the repository twice, let alone write');
+  });
+});
+
+/** Stage 13 requirement 12: the settings.save channel and its shape. */
+
+/* These tests assert the `settings.save` channel exists and that its handler
+ * respects the `AppSettingsViewDraft` shape (four editable fields only).
+ */
+describe('Stage 13 requirement 12: the settings.save channel', () => {
+  it('registers exactly ONE settings.save channel', () => {
+    const saveChannels = listIpcChannelNames().filter((name) => name.includes(':settings:save'));
+    assert.deepEqual(saveChannels, [IPC_CHANNELS.settingsSave]);
+  });
+
+  it('declares the save payload as an object with exactly four fields', () => {
+    const [, , verb] = IPC_CHANNELS.settingsSave.split(':');
+    assert.equal(verb, 'save');
+    // Verify the preload API exposes the save with the correct parameter count.
+    const api = createDrugManagerApi(async () => null) as unknown as Record<string, object>;
+    const settingsApi = api['settings'] as Record<string, object>;
+    assert.deepEqual(Object.keys(settingsApi), ['get', 'save']);
+  });
+
+  it('the save handler merges only the four editable fields', async () => {
+    const handlers = handlersOver(new FakeSettingsRepository(STORED));
+    const saveHandler = handlers[IPC_CHANNELS.settingsSave];
+
+    // Invoke with the four editable fields plus extra noise.
+    const outcome = await (saveHandler as (event: unknown, payload: unknown) => unknown)(
+      {},
+      { minDaysBetweenOrders: 5, allowFridayOrders: true, startTime: '09:00', endTime: '17:30', extraField: 'should be ignored' },
+    );
+
+    assert.equal(outcome.ok, true);
+    const repository = new FakeSettingsRepository(STORED);
+    assert.equal(repository.calls, 1, 'save must touch the repository once');
+    const saved = repository.lastSaved;
+    assert.equal(saved?.minDaysBetweenOrders, 5);
+    assert.equal(saved?.allowFridayOrders, true);
+    assert.equal(saved?.startTime, '09:00');
+    assert.equal(saved?.endTime, '17:30');
+    // Dead fields must NOT be overridden by the draft.
+    assert.equal(saved?.maxDailyOrders, 42);
+    assert.equal(saved?.assistantId, 'EMP-777');
+  });
+
+  it('rejects a draft missing required fields without touching the repository', async () => {
+    const repository = new FakeSettingsRepository(STORED);
+    const handlers = handlersOver(repository);
+    const saveHandler = handlers[IPC_CHANNELS.settingsSave];
+
+    // minDaysBetweenOrders out of range.
+    const outcome = await (saveHandler as (event: unknown, payload: unknown) => unknown)(
+      {},
+      { minDaysBetweenOrders: 0, allowFridayOrders: true, startTime: '09:00', endTime: '17:30' },
+    );
+
+    assert.equal(outcome.ok, false);
+    assert.equal(repository.calls, 0, 'validation failure must not touch the repository');
+  });
+
+  it('rejects a draft with bad time format without touching the repository', async () => {
+    const repository = new FakeSettingsRepository(STORED);
+    const handlers = handlersOver(repository);
+    const saveHandler = handlers[IPC_CHANNELS.settingsSave];
+
+    const outcome = await (saveHandler as (event: unknown, payload: unknown) => unknown)(
+      {},
+      { minDaysBetweenOrders: 5, allowFridayOrders: true, startTime: 'invalid', endTime: '17:30' },
+    );
+
+    assert.equal(outcome.ok, false);
+    assert.equal(repository.calls, 0, 'validation failure must not touch the repository');
+  });
+
+  it('accepts a draft with minDaysBetweenOrders > 365 (no upper limit)', async () => {
+    const repository = new FakeSettingsRepository(STORED);
+    const handlers = handlersOver(repository);
+    const saveHandler = handlers[IPC_CHANNELS.settingsSave];
+
+    const outcome = await (saveHandler as (event: unknown, payload: unknown) => unknown)(
+      {},
+      { minDaysBetweenOrders: 400, allowFridayOrders: true, startTime: '09:00', endTime: '17:30' },
+    );
+
+    assert.equal(outcome.ok, true, '400 must be accepted: no upper limit on minDaysBetweenOrders');
+    assert.equal(repository.calls, 1, '400 must reach the repository');
+    const saved = repository.lastSaved;
+    assert.equal(saved?.minDaysBetweenOrders, 400, 'the stored value must reflect the draft');
   });
 });

@@ -558,17 +558,19 @@
 
           <section class="panel" id="settings-view" hidden>
             <!--
-              Stage 13 - the system settings page, and it is READ-ONLY.
+              Stage N - the system settings page, now editable for the four
+              rule-bearing fields: minDaysBetweenOrders, allowFridayOrders,
+              startTime, endTime.
 
-              There is NO <form> in this section, and no <input>, <select> or
-              <textarea> either. That is deliberate and it is the strongest form of
-              the guarantee: with no editable control there is nothing on this page
-              a user could change and nothing for a submission to carry. The only
-              controls are the refresh and retry buttons, both `type="button"`.
+              The four editable fields each render as a control inside a form so
+              Enter submits, and a single save button commits them through
+              `api.settings.save`. `maxDailyOrders` and `assistantId` remain
+              read-only display values - they are dead in the Windows processing
+              model and are never sent back.
 
-              The panel is a <dl class="detail-list"> rather than a table because
-              these are labelled values, not rows: the project already uses this
-              exact pair on the dashboard, so no new visual grammar is introduced.
+              There is no submit button on the form itself; save is triggered by
+              the dedicated `settings-save` button which declares `type="button"`
+              and is handled by JS (it never navigates the page).
             -->
             <div class="panel-head">
               <h3 class="panel-title">إعدادات النظام</h3>
@@ -584,40 +586,64 @@
               <button class="button button-ghost" id="settings-retry" type="button" hidden>إعادة المحاولة</button>
             </div>
 
-            <dl class="detail-list">
-              <div class="detail-row">
-                <dt>أقل عدد أيام بين الطلبات</dt>
-                <dd id="settings-min-days"></dd>
-              </div>
-              <div class="detail-row">
-                <dt>السماح بطلبات الجمعة</dt>
-                <dd id="settings-friday"></dd>
-              </div>
-              <div class="detail-row">
-                <dt>بداية دوام الطلبات</dt>
-                <dd id="settings-start-time" class="value-ltr"></dd>
-              </div>
-              <div class="detail-row">
-                <dt>نهاية دوام الطلبات</dt>
-                <dd id="settings-end-time" class="value-ltr"></dd>
-              </div>
+            <form id="settings-form" novalidate>
+              <dl class="detail-list">
+                <div class="detail-row">
+                  <dt>أقل عدد أيام بين الطلبات</dt>
+                  <input
+                    id="settings-min-days"
+                    type="number"
+                    min="1"
+                    max="365"
+                    inputmode="numeric"
+                    class="value-ltr"
+                  />
+                </div>
+                <div class="detail-row">
+                  <dt>السماح بطلبات الجمعة</dt>
+                  <select id="settings-friday" class="value-ltr">
+                    <option value="true">نعم</option>
+                    <option value="false">لا</option>
+                  </select>
+                </div>
+                <div class="detail-row">
+                  <dt>بداية دوام الطلبات</dt>
+                  <input
+                    id="settings-start-time"
+                    type="time"
+                    class="value-ltr"
+                  />
+                </div>
+                <div class="detail-row">
+                  <dt>نهاية دوام الطلبات</dt>
+                  <input
+                    id="settings-end-time"
+                    type="time"
+                    class="value-ltr"
+                  />
+                </div>
 
-              <!--
-                The last two are DEAD in the current model: A5 commented the
-                `maxDailyOrders` check out and `assistantId` is administrative
-                only. They are shown, clearly labelled, rather than hidden: a
-                manager who opens the settings screen should be able to see that
-                these values exist AND that they currently drive nothing.
-              -->
-              <div class="detail-row">
-                <dt>الحدّ الأقصى للطلبات اليومية (غير مُفعّل)</dt>
-                <dd id="settings-max-daily"></dd>
-              </div>
-              <div class="detail-row">
-                <dt>معرّف المساعد (غير مُفعّل)</dt>
-                <dd id="settings-assistant" class="value-ltr"></dd>
-              </div>
-            </dl>
+                <!--
+                  The last two are DEAD in the current model: A5 commented the
+                  `maxDailyOrders` check out and `assistantId` is administrative
+                  only. They are shown, clearly labelled, rather than hidden: a
+                  manager who opens the settings screen should be able to see that
+                  these values exist AND that they currently drive nothing.
+                -->
+                <div class="detail-row">
+                  <dt>الحدّ الأقصى للطلبات اليومية (غير مُفعّل)</dt>
+                  <dd id="settings-max-daily"></dd>
+                </div>
+                <div class="detail-row">
+                  <dt>معرّف المساعد (غير مُفعّل)</dt>
+                  <dd id="settings-assistant" class="value-ltr"></dd>
+                </div>
+              </dl>
+            </form>
+
+            <div class="settings-actions">
+              <button class="button button-primary" id="settings-save" type="button">حفظ</button>
+            </div>
           </section>
 
           <section class="panel" id="stock-view" hidden>

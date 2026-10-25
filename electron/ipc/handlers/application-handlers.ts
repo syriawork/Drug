@@ -115,6 +115,12 @@ export function createIpcHandlers(options: CreateIpcHandlersOptions): IpcHandler
       return application.orderRequests.submitPendingRequest(payload);
     }),
     [IPC_CHANNELS.settingsGet]: guard(async () => application.manager.getSettings()),
+    // Stage N: the settings SAVE. The renderer sends the four editable fields
+    // only; the application layer validates, preserves the dead fields, and
+    // writes the full `AppSettings` through the repository contract.
+    [IPC_CHANNELS.settingsSave]: guard(async (payload: unknown) => {
+      return application.manager.saveSettings(payload);
+    }),
     [IPC_CHANNELS.ordersList]: guard(async () => application.manager.listOrderHistoryPage()),
     [IPC_CHANNELS.ordersHistoryLoadMore]: guard(async () => application.manager.loadMoreOrderHistory()),
     [IPC_CHANNELS.ordersMyHistory]: guard(async () => application.manager.listMyOrders()),

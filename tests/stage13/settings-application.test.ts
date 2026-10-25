@@ -1,21 +1,24 @@
 /**
- * Stage 13 - the application layer for the read-only System Settings page.
+ * Stage 13 - the application layer for the System Settings page.
  *
  * WHAT THIS FILE PROVES
- * The settings page needs no new application code: `manager.getSettings()` and the
- * `AppSettingsView` projection already existed. What this suite does is pin the
- * behaviour that page depends on, so a change to the SHARED read path cannot
+ * The settings page reads through `manager.getSettings()` and writes through
+ * `manager.saveSettings()`, both projecting on the shared `AppSettingsView` /
+ * `AppSettingsViewDraft` types. What this suite does is pin the behaviour the
+ * page depends on, so a change to the SHARED read or write path cannot
  * silently alter what the screen shows:
  *
  *  - every stored field reaches the view EXACTLY as stored, with no transformation
  *  - an ABSENT document is reported as absent (`configured: false`) and shows the
  *    fallbacks the processing step really would apply - not blanks and not guesses
- *  - the two DEAD fields pass through untouched, because this stage does not
- *    reinterpret them or reconcile them with the mapper's own defaults (M1)
+ *  - the two DEAD fields pass through untouched on read, and are preserved from
+ *    the stored document on write (they are never sent by the renderer)
+ *  - `saveSettings` merges the four editable fields into the stored document,
+ *    leaving `maxDailyOrders` and `assistantId` from the current record
  *  - a failure is an honest failure, with nothing leaked
  *
- * The real `toAppSettingsView` is used, not a copy, so a test that passes here
- * describes what the shipped projection does.
+ * The real `toAppSettingsView` and `toAppSettingsDraft` are used, not copies, so
+ * a test that passes here describes what the shipped projection does.
  */
 
 import assert from 'node:assert/strict';
@@ -226,27 +229,184 @@ describe('Stage 13 requirement 4: failures are honest and leak nothing', () => {
   });
 });
 
-describe('Stage 13 requirement 5: the read path offers no write to call', () => {
-  it('exposes exactly one settings operation on the application surface', () => {
+describe('Stage 13 requirement 5: the settings surface offers read and write', () => {
+  it('exposes exactly two settings operations on the application surface', () => {
     const application = applicationFor(storedSettings());
     const settingsMembers = Object.getOwnPropertyNames(
       Object.getPrototypeOf(application.manager),
     ).filter((name) => name.toLowerCase().includes('setting'));
 
-    // One method, and it is a read. A save here would be a second way to change a
-    // rule the mobile settings screen owns.
-    assert.deepEqual(settingsMembers, ['getSettings']);
+    // One read, one write.
+    assert.deepEqual(settingsMembers, ['getSettings', 'saveSettings']);
   });
 
-  it('reaches the repository once per read, and never a write', async () => {
+  it('reaches the repository once per read, and once per write', async () => {
     const repository = new FakeSettingsRepository(storedSettings());
 
-    const result = await applicationOver(repository).manager.getSettings();
+    const readResult = await applicationOver(repository).manager.getSettings();
+    assert.equal(readResult.ok, true);
+    assert.equal(repository.calls, 1, 'one read, one repository call');
+
+    const writeResult = await applicationOver(repository).manager.saveSettings({
+      minDaysBetweenOrders: 3,
+      allowFridayOrders: false,
+      startTime: '08:00',
+      endTime: '17:00',
+    });
+    assert.equal(writeResult.ok, true);
+    assert.equal(repository.calls, 2, 'a second call for the save');
+  });
+
+  it('never sends the dead fields to the repository on save', async () => {
+    const repository = new FakeSettingsRepository(storedSettings());
+
+    const result = await applicationOver(repository).manager.saveSettings({
+      minDaysBetweenOrders: 3,
+      allowFridayOrders: false,
+      startTime: '08:00',
+      endTime: '17:00',
+    });
 
     assert.equal(result.ok, true);
-    assert.equal(repository.calls, 1, 'one read, one repository call');
-    // `saveAppSettings` throws by construction, so a read that reached it would fail
-    // the test above rather than pass quietly.
-    assert.equal(Object.getOwnPropertyNames(FakeSettingsRepository.prototype).includes('saveAppSettings'), true);
+    const saved = repository.lastSaved;
+    assert.equal(saved?.minDaysBetweenOrders, 3);
+    assert.equal(saved?.allowFridayOrders, false);
+    assert.equal(saved?.startTime, '08:00');
+    assert.equal(saved?.endTime, '17:00');
+    // The dead fields come from the stored document, never from the draft.
+    assert.equal(saved?.maxDailyOrders, 42);
+    assert.equal(saved?.assistantId, 'EMP-777');
+  });
+
+  it('preserves dead fields from defaults when no document exists', async () => {
+    const repository = new FakeSettingsRepository(null);
+
+    const result = await applicationOver(repository).manager.saveSettings({
+      minDaysBetweenOrders: 3,
+      allowFridayOrders: false,
+      startTime: '08:00',
+      endTime: '17:00',
+    });
+
+    assert.equal(result.ok, true);
+    const saved = repository.lastSaved;
+    assert.equal(saved?.minDaysBetweenOrders, 3);
+    assert.equal(saved?.allowFridayOrders, false);
+    assert.equal(saved?.startTime, '08:00');
+    assert.equal(saved?.endTime, '17:00');
+    assert.equal(saved?.maxDailyOrders, 0);
+    assert.equal(saved?.assistantId, '');
+  });
+
+  it('rejects a malformed draft without reaching the repository', async () => {
+    const repository = new FakeSettingsRepository(storedSettings());
+
+    const result = await applicationOver(repository).manager.saveSettings({
+      minDaysBetweenOrders: -1,
+      allowFridayOrders: false,
+      startTime: '08:00',
+      endTime: '17:00',
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(repository.calls, 0, 'validation failure must not touch the repository');
+  });
+
+  it('accepts 0 as minDaysBetweenOrders', async () => {
+    const repository = new FakeSettingsRepository(storedSettings());
+
+    const result = await applicationOver(repository).manager.saveSettings({
+      minDaysBetweenOrders: 0,
+      allowFridayOrders: false,
+      startTime: '08:00',
+      endTime: '17:00',
+    });
+
+    assert.equal(result.ok, true, '0 must be accepted as a valid minDaysBetweenOrders');
+    assert.equal(repository.calls, 1, '0 must reach the repository');
+  });
+
+  it('accepts values greater than 365 as minDaysBetweenOrders', async () => {
+    const repository = new FakeSettingsRepository(storedSettings());
+
+    const result = await applicationOver(repository).manager.saveSettings({
+      minDaysBetweenOrders: 400,
+      allowFridayOrders: false,
+      startTime: '08:00',
+      endTime: '17:00',
+    });
+
+    assert.equal(result.ok, true, '400 must be accepted as a valid minDaysBetweenOrders (no upper limit)');
+    assert.equal(repository.calls, 1, '400 must reach the repository');
+  });
+
+  it('rejects fractional minDaysBetweenOrders', async () => {
+    const repository = new FakeSettingsRepository(storedSettings());
+
+    const result = await applicationOver(repository).manager.saveSettings({
+      minDaysBetweenOrders: 1.5,
+      allowFridayOrders: false,
+      startTime: '08:00',
+      endTime: '17:00',
+    });
+
+    assert.equal(result.ok, false, '1.5 must be rejected: minDaysBetweenOrders must be an integer');
+    assert.equal(repository.calls, 0, 'fractional rejection must not reach the repository');
+  });
+
+  it('rejects non-numeric minDaysBetweenOrders', async () => {
+    const repository = new FakeSettingsRepository(storedSettings());
+
+    const result = await applicationOver(repository).manager.saveSettings({
+      minDaysBetweenOrders: 'abc' as unknown as number,
+      allowFridayOrders: false,
+      startTime: '08:00',
+      endTime: '17:00',
+    });
+
+    assert.equal(result.ok, false, '"abc" must be rejected: minDaysBetweenOrders must be a number');
+    assert.equal(repository.calls, 0, 'non-numeric rejection must not reach the repository');
+  });
+
+  it('refuses when there is no session, WITHOUT reaching the repository', async () => {
+    const repository = new FakeSettingsRepository(storedSettings());
+
+    const result = await applicationOver(repository, SIGNED_OUT).manager.saveSettings({
+      minDaysBetweenOrders: 3,
+      allowFridayOrders: false,
+      startTime: '08:00',
+      endTime: '17:00',
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(!result.ok ? result.error.code : null, 'AUTHENTICATION_FAILED');
+    assert.equal(repository.calls, 0, 'the guard must refuse BEFORE any write is attempted');
+  });
+
+  it('turns a rules denial into a safe failure', async () => {
+    const result = await applicationFor(storedSettings(), rulesDenied('settings/app')).manager.saveSettings({
+      minDaysBetweenOrders: 3,
+      allowFridayOrders: false,
+      startTime: '08:00',
+      endTime: '17:00',
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(!result.ok ? result.error.code : null, 'AUTHORIZATION_DENIED');
+    const serialized = JSON.stringify(result);
+    assert.equal(serialized.includes('settings/app'), false, 'no document path may leak');
+    assert.equal(serialized.toLowerCase().includes('permission'), false);
+  });
+
+  it('survives an infrastructure failure without inventing values', async () => {
+    const result = await applicationFor(storedSettings(), new Error('socket hang up')).manager.saveSettings({
+      minDaysBetweenOrders: 3,
+      allowFridayOrders: false,
+      startTime: '08:00',
+      endTime: '17:00',
+    });
+
+    assert.equal(result.ok, false, 'a thrown transport error must not be reported as a success');
+    assert.equal(!result.ok ? result.error.message.includes('socket hang up') : true, false);
   });
 });

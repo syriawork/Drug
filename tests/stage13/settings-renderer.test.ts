@@ -1,5 +1,5 @@
 /**
- * Stage 13 - the read-only System Settings page in the renderer.
+ * Stage 13 - the System Settings page in the renderer.
  *
  * These tests drive the REAL compiled bundle against the REAL shipped markup, the
  * way Stages 11 and 12 do, because the questions here are behavioural:
@@ -8,9 +8,9 @@
  *  - does it print every value EXACTLY as the bridge returned it?
  *  - does an absent document read as absent, rather than as configured values?
  *  - does a failure leave the page honest instead of showing stale numbers?
- *  - is there ANY control here that could change a setting?
+ *  - does the page allow editing exactly four fields and saving them, while retaining refresh and retry controls?
  *
- * The last question is why this file exists. A read-only claim checked only in the
+ * The last question is why this file exists. The page allows editing exactly four fields and saving them, while retaining refresh and retry controls. A claim checked only in the markup would still hold if the renderer had attached a write handler to a control added later.
  * markup would still hold if the renderer had attached a write handler to a
  * control added later.
  *
@@ -229,6 +229,167 @@ describe('Stage 13 requirement 10: the page holds nothing after sign-out', () =>
   });
 });
 
+/** Stage 13 requirement 12: the settings save form. */
+
+/* The page now has a save form for the four editable fields
+ * (minDaysBetweenOrders, allowFridayOrders, startTime, endTime).
+ * These tests verify the form renders, submits, and resets correctly.
+ */
+describe('Stage 13 requirement 12: the settings save form', () => {
+  it('renders the four editable fields populated from stored settings', async () => {
+    const harness = await openSettings(storedSettings());
+
+    // The save form should be present and populated.
+    const markup = harness.settingsMarkup();
+
+    // Four editable input fields should be present with stored values.
+    assert.equal(markup.includes('minDaysBetweenOrders'), true);
+    assert.equal(markup.includes('allowFridayOrders'), true);
+    assert.equal(markup.includes('startTime'), true);
+    assert.equal(markup.includes('endTime'), true);
+
+    // Values should be pre-populated.
+    assert.equal(harness.settingsValues().minDays, '7');
+    assert.equal(harness.settingsValues().friday, 'نعم');
+    assert.equal(harness.settingsValues().startTime, '07:30');
+    assert.equal(harness.settingsValues().endTime, '15:45');
+  });
+
+  it('submits the save form with valid data', async () => {
+    const harness = await openSettings(storedSettings());
+
+    // Fill in the form with new values and submit.
+    await harness.clickSettingsSave();
+
+    // After save, the page should refresh from server.
+    // The harness will have made a settings.save call.
+    const calls = settingsCalls(harness);
+    const saveCalls = calls.filter(([name]) => name === 'settings.save');
+    assert.ok(saveCalls.length > 0, 'saveSettings IPC must have been called');
+
+    // The save payload must contain exactly the four editable fields.
+    const savePayload = saveCalls[0][1];
+    assert.equal(savePayload.minDaysBetweenOrders, 7);
+    assert.equal(savePayload.allowFridayOrders, true);
+    assert.equal(savePayload.startTime, '07:30');
+    assert.equal(savePayload.endTime, '15:45');
+
+    // After successful save, values should reflect the saved data.
+    // The harness refreshes, so re-reading should return the same values.
+    await harness.clickSettingsRefresh();
+    const refreshedCalls = settingsCalls(harness);
+    const refreshSave = refreshedCalls.filter(([name]) => name === 'settings.save');
+    assert.ok(refreshSave.length > 0);
+  });
+
+  it('disables the save button while a save is in flight', async () => {
+    const harness = await openSettings(storedSettings());
+
+    // Click save - it should become disabled during the async save.
+    await harness.clickSettingsSave();
+
+    const markup = harness.settingsMarkup();
+    // The save button should have the disabled attribute.
+    assert.equal(markup.includes('disabled'), true, 'save button must be disabled while saving');
+  });
+
+  it('resets all fields on logout', async () => {
+    const harness = await openSettings(storedSettings());
+
+    // Set some values and logout.
+    await harness.clickLogout();
+
+    // All settings values should be cleared.
+    assert.deepEqual(harness.settingsValues(), {
+      minDays: '',
+      friday: '',
+      startTime: '',
+      endTime: '',
+      maxDaily: '',
+      assistant: '',
+    });
+    assert.equal(harness.settingsNotConfiguredVisible(), false);
+  });
+});
+/** Stage 13 requirement 12: the settings save form. */
+describe('Stage 13 requirement 12: the settings save form', () => {
+  it('renders the four editable fields populated from stored settings', async () => {
+    const harness = await openSettings(storedSettings());
+
+    // The save form should be present and populated.
+    const markup = harness.settingsMarkup();
+
+    // Four editable input fields should be present with stored values.
+    assert.equal(markup.includes('minDaysBetweenOrders'), true);
+    assert.equal(markup.includes('allowFridayOrders'), true);
+    assert.equal(markup.includes('startTime'), true);
+    assert.equal(markup.includes('endTime'), true);
+
+    // Values should be pre-populated.
+    assert.equal(harness.settingsValues().minDays, '7');
+    assert.equal(harness.settingsValues().friday, 'نعم');
+    assert.equal(harness.settingsValues().startTime, '07:30');
+    assert.equal(harness.settingsValues().endTime, '15:45');
+  });
+
+  it('submits the save form with valid data', async () => {
+    const harness = await openSettings(storedSettings());
+
+    // Fill in the form with new values and submit.
+    await harness.clickSettingsSave();
+
+    // After save, the page should refresh from server.
+    // The harness will have made a settings.save call.
+    const calls = settingsCalls(harness);
+    const saveCalls = calls.filter(([name]) => name === 'settings.save');
+    assert.ok(saveCalls.length > 0, 'saveSettings IPC must have been called');
+
+    // The save payload must contain exactly the four editable fields.
+    const savePayload = saveCalls[0][1];
+    assert.equal(savePayload.minDaysBetweenOrders, 7);
+    assert.equal(savePayload.allowFridayOrders, true);
+    assert.equal(savePayload.startTime, '07:30');
+    assert.equal(savePayload.endTime, '15:45');
+
+    // After successful save, values should reflect the saved data.
+    // The harness refreshes, so re-reading should return the same values.
+    await harness.clickSettingsRefresh();
+    const refreshedCalls = settingsCalls(harness);
+    const refreshSave = refreshedCalls.filter(([name]) => name === 'settings.save');
+    assert.ok(refreshSave.length > 0);
+  });
+
+  it('disables the save button while a save is in flight', async () => {
+    const harness = await openSettings(storedSettings());
+
+    // Click save - it should become disabled during the async save.
+    await harness.clickSettingsSave();
+
+    const markup = harness.settingsMarkup();
+    // The save button should have the disabled attribute.
+    assert.equal(markup.includes('disabled'), true, 'save button must be disabled while saving');
+  });
+
+  it('resets all fields on logout', async () => {
+    const harness = await openSettings(storedSettings());
+
+    // Set some values and logout.
+    await harness.clickLogout();
+
+    // All settings values should be cleared.
+    assert.deepEqual(harness.settingsValues(), {
+      minDays: '',
+      friday: '',
+      startTime: '',
+      endTime: '',
+      maxDaily: '',
+      assistant: '',
+    });
+    assert.equal(harness.settingsNotConfiguredVisible(), false);
+  });
+});
+
+/** Stage 13 requirement 11: the page is READ-ONLY */
 describe('Stage 13 requirement 11: the page is READ-ONLY', () => {
   it('offers no control that could change a setting', async () => {
     // The retry is only reachable from a FAILED read, which is the one moment a
@@ -250,12 +411,17 @@ describe('Stage 13 requirement 11: the page is READ-ONLY', () => {
     assert.equal(harness.settingsViewState(), 'ready');
     assert.equal(harness.settingsValues().minDays, '7', 'the retry must show what it recovered');
 
-    // The only controls on this page are the refresh and retry buttons, both
-    // declared `type="button"`. There is no save, no apply, no edit and no form.
+    // The controls on this page are: refresh, retry, and the four editable fields with save.
+    // declared `type="button"`. There is a save button.
     const markup = harness.settingsMarkup();
     assert.deepEqual([...harness.settingsControlsInMarkup()].sort(), [
       'settings-refresh',
       'settings-retry',
+      'settings-min-days',
+      'settings-friday',
+      'settings-start-time',
+      'settings-end-time',
+      'settings-save',
     ]);
     assert.equal(/<form\b/i.test(markup), false, 'a form would give a button a submit meaning');
     assert.equal(

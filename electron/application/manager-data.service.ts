@@ -31,11 +31,12 @@
 import type { MedicinesRepository, SettingsRepository } from '../repositories/contracts/medicines-repository';
 import type { OrderRequestsRepository, OrdersRepository, StockLogsRepository } from '../repositories/contracts/order-repository';
 import type { UsersRepository } from '../repositories/contracts/users-repository';
-import type { Order, OrderRequest } from '../domain/models';
+import type { AppSettings, Order, OrderRequest } from '../domain/models';
 import { ORDER_REQUEST_STATUSES } from '../domain/values';
 import { ApplicationError } from './application-error';
 import { applicationSuccess, attempt, applicationRefusal } from './application-result';
 import {
+  toAppSettingsDraft,
   toAppSettingsView,
   toMedicineListItemView,
   toOrderHistoryItemView,
@@ -495,6 +496,55 @@ export class ManagerApplicationService {
     }
     return attempt(
       async () => toAppSettingsView(await this.repositories.settings.getAppSettings()),
+      this.onDiagnostic,
+    );
+  }
+
+  /**
+   * Stage N: saves the four editable rule fields back to `settings/app`.
+   *
+   * The renderer only ever sends `minDaysBetweenOrders`, `allowFridayOrders`,
+   * `startTime` and `endTime`. The dead fields (`maxDailyOrders`,
+   * `assistantId`) are preserved from the currently stored document so a
+   * Windows save never wipes values the Windows processing model does not
+   * touch. The current document is read first, then the draft is merged in,
+   * and the full `AppSettings` is handed to the repository.
+   */
+  public async saveSettings(draft: unknown): Promise<ApplicationResult<null>> {
+    if (!this.auth.getState().authenticated) {
+      return applicationRefusal('AUTHENTICATION_FAILED', {
+        retryable: false,
+        diagnostic: 'saveSettings without a session',
+      });
+    }
+
+    const validated = toAppSettingsDraft(draft);
+    if (!validated.ok) {
+      return validated;
+    }
+
+    return attempt(
+      async () => {
+        const current = await this.repositories.settings.getAppSettings();
+        const source = current ?? {
+          minDaysBetweenOrders: 15,
+          maxDailyOrders: 0,
+          allowFridayOrders: false,
+          startTime: '06:00',
+          endTime: '10:00',
+          assistantId: '',
+        };
+        const merged: AppSettings = Object.freeze({
+          minDaysBetweenOrders: validated.value.minDaysBetweenOrders,
+          maxDailyOrders: source.maxDailyOrders,
+          allowFridayOrders: validated.value.allowFridayOrders,
+          startTime: validated.value.startTime,
+          endTime: validated.value.endTime,
+          assistantId: source.assistantId,
+        });
+        await this.repositories.settings.saveAppSettings(merged);
+        return null;
+      },
       this.onDiagnostic,
     );
   }

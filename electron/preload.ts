@@ -43,6 +43,7 @@ const ORDER_REQUESTS_LIST_CHANNEL = 'drug-manager:order-requests:list';
 const ORDER_REQUESTS_GET_CHANNEL = 'drug-manager:order-requests:get';
 const ORDER_REQUESTS_SUBMIT_CHANNEL = 'drug-manager:order-requests:submit';
 const SETTINGS_GET_CHANNEL = 'drug-manager:settings:get';
+const SETTINGS_SAVE_CHANNEL = 'drug-manager:settings:save';
 const ORDERS_PROCESS_CHANNEL = 'drug-manager:orders:process';
 const ORDERS_LIST_CHANNEL = 'drug-manager:orders:list';
 const ORDERS_HISTORY_LOAD_MORE_CHANNEL = 'drug-manager:orders:history-load-more';
@@ -124,6 +125,11 @@ const drugManagerApi: DrugManagerApi = deepFreeze({
     get: async (): Promise<ApplicationResult<AppSettingsView>> => {
       const response = await ipcRenderer.invoke(SETTINGS_GET_CHANNEL);
       return response as ApplicationResult<AppSettingsView>;
+    },
+    // Stage N: saves the four editable rule fields back to `settings/app`.
+    save: async (input: AppSettingsViewDraft): Promise<ApplicationResult<null>> => {
+      const response = await ipcRenderer.invoke(SETTINGS_SAVE_CHANNEL, input);
+      return response as ApplicationResult<null>;
     },
   },
   // Stage 14: the READ-ONLY inventory movement audit trail. It takes NO argument

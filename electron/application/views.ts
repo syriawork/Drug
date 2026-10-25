@@ -27,6 +27,7 @@ import type { AppSettings, DomainTimestamp, Medicine, Order, OrderRequest, Stock
 import { normalizeMonthYear } from '../domain/month-year';
 import { isOrderStatus, isStockMovementType, isUserRole, isUserStatus, type OrderRequestStatus } from '../domain/values';
 import type { OrderProcessingOutcome } from '../services/order-processing.service';
+import { applicationSuccess, applicationRefusal } from './application-result';
 
 /** Flattens a domain timestamp to the ISO-8601 string the renderer receives. */
 function toIso(timestamp: DomainTimestamp | null): string | null {
@@ -256,6 +257,92 @@ export function toAppSettingsView(settings: AppSettings | null): AppSettingsView
     assistantId: source.assistantId,
     configured: settings !== null,
   });
+}
+
+/** `HH:mm` - two digits, colon, two digits. Anything else is refused. */
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * Narrows a renderer-supplied `AppSettingsViewDraft` into a validated draft.
+ *
+ * Only the four editable fields are accepted: `minDaysBetweenOrders`,
+ * `allowFridayOrders`, `startTime` and `endTime`. Any extra key, a missing
+ * key, or a malformed value produces a `VALIDATION_FAILED` refusal - the
+ * renderer cannot smuggle `maxDailyOrders`, `assistantId` or a document path
+ * into the save payload.
+ *
+ * The dead fields (`maxDailyOrders`, `assistantId`) are intentionally absent:
+ * they are never sent back to Firestore from Windows. Their stored values are
+ * preserved by the service layer, which reads the current document before
+ * merging the draft into a full `AppSettings` for the repository.
+ */
+export function toAppSettingsDraft(draft: unknown): ApplicationResult<AppSettingsViewDraft> {
+  if (draft === null || typeof draft !== 'object' || Array.isArray(draft)) {
+    return applicationRefusal('VALIDATION_FAILED', {
+      retryable: false,
+      diagnostic: 'rejected a malformed settings draft: not an object',
+    });
+  }
+
+  const candidate = draft as Record<string, unknown>;
+  const keys = Object.keys(candidate);
+  const allowed = ['minDaysBetweenOrders', 'allowFridayOrders', 'startTime', 'endTime'];
+
+  for (const key of keys) {
+    if (!allowed.includes(key)) {
+      return applicationRefusal('VALIDATION_FAILED', {
+        retryable: false,
+        diagnostic: `rejected unexpected settings field: ${key}`,
+      });
+    }
+  }
+  for (const key of allowed) {
+    if (!Object.hasOwn(candidate, key)) {
+      return applicationRefusal('VALIDATION_FAILED', {
+        retryable: false,
+        diagnostic: `rejected settings draft missing field: ${key}`,
+      });
+    }
+  }
+
+  const minDays = candidate['minDaysBetweenOrders'];
+  if (typeof minDays !== 'number' || !Number.isFinite(minDays) || minDays < 0 || !Number.isSafeInteger(minDays)) {
+    return applicationRefusal('VALIDATION_FAILED', {
+      retryable: false,
+      diagnostic: 'rejected minDaysBetweenOrders: must be a non-negative safe integer',
+    });
+  }
+
+  const allowFriday = candidate['allowFridayOrders'];
+  if (typeof allowFriday !== 'boolean') {
+    return applicationRefusal('VALIDATION_FAILED', {
+      retryable: false,
+      diagnostic: 'rejected allowFridayOrders: must be a boolean',
+    });
+  }
+
+  const startTime = candidate['startTime'];
+  if (typeof startTime !== 'string' || !TIME_PATTERN.test(startTime)) {
+    return applicationRefusal('VALIDATION_FAILED', {
+      retryable: false,
+      diagnostic: 'rejected startTime: must be HH:mm',
+    });
+  }
+
+  const endTime = candidate['endTime'];
+  if (typeof endTime !== 'string' || !TIME_PATTERN.test(endTime)) {
+    return applicationRefusal('VALIDATION_FAILED', {
+      retryable: false,
+      diagnostic: 'rejected endTime: must be HH:mm',
+    });
+  }
+
+  return applicationSuccess({
+    minDaysBetweenOrders: minDays,
+    allowFridayOrders: allowFriday,
+    startTime,
+    endTime,
+  } satisfies AppSettingsViewDraft);
 }
 
 /**

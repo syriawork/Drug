@@ -324,6 +324,21 @@ interface AppSettingsView {
 }
 
 /**
+ * The editable settings a manager may send back to `settings/app`.
+ *
+ * Only the four fields the Windows model actually enforces are editable:
+ * `minDaysBetweenOrders`, `allowFridayOrders`, `startTime` and `endTime`.
+ * `maxDailyOrders` and `assistantId` are dead in the Windows processing model
+ * and are never sent back - they are display-only on the read side.
+ */
+interface AppSettingsViewDraft {
+  readonly minDaysBetweenOrders: number;
+  readonly allowFridayOrders: boolean;
+  readonly startTime: string;
+  readonly endTime: string;
+}
+
+/**
  * The verdict of one Stage 6 processing attempt.
  *
  * `rejected` and `already-processed` are SUCCESSES of the operation, not errors:
