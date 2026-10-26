@@ -81,7 +81,7 @@ const HOSTILE_PAYLOADS: readonly unknown[] = [
   { where: [['configured', '==', true]] },
 ];
 
-type Handlers = Readonly<Record<string, ((event: unknown, payload: unknown) => unknown)>>;
+type Handlers = Readonly<Record<string, ((event: unknown, payload: unknown) => Promise<ApplicationResult<unknown>>)>>;
 
 function handlersOver(settings: FakeSettingsRepository): Handlers {
   return createIpcHandlers({
@@ -254,7 +254,7 @@ describe('Stage 13 requirement 12: the settings.save channel', () => {
     const saveHandler = handlers[IPC_CHANNELS.settingsSave];
 
     // Invoke with the four editable fields plus extra noise.
-    const outcome = await (saveHandler as (event: unknown, payload: unknown) => unknown)(
+    const outcome = await saveHandler(
       {},
       { minDaysBetweenOrders: 5, allowFridayOrders: true, startTime: '09:00', endTime: '17:30', extraField: 'should be ignored' },
     );
@@ -278,7 +278,7 @@ describe('Stage 13 requirement 12: the settings.save channel', () => {
     const saveHandler = handlers[IPC_CHANNELS.settingsSave];
 
     // minDaysBetweenOrders out of range.
-    const outcome = await (saveHandler as (event: unknown, payload: unknown) => unknown)(
+    const outcome = await saveHandler(
       {},
       { minDaysBetweenOrders: 0, allowFridayOrders: true, startTime: '09:00', endTime: '17:30' },
     );
@@ -292,7 +292,7 @@ describe('Stage 13 requirement 12: the settings.save channel', () => {
     const handlers = handlersOver(repository);
     const saveHandler = handlers[IPC_CHANNELS.settingsSave];
 
-    const outcome = await (saveHandler as (event: unknown, payload: unknown) => unknown)(
+    const outcome = await saveHandler(
       {},
       { minDaysBetweenOrders: 5, allowFridayOrders: true, startTime: 'invalid', endTime: '17:30' },
     );
@@ -306,7 +306,7 @@ describe('Stage 13 requirement 12: the settings.save channel', () => {
     const handlers = handlersOver(repository);
     const saveHandler = handlers[IPC_CHANNELS.settingsSave];
 
-    const outcome = await (saveHandler as (event: unknown, payload: unknown) => unknown)(
+    const outcome = await saveHandler(
       {},
       { minDaysBetweenOrders: 400, allowFridayOrders: true, startTime: '09:00', endTime: '17:30' },
     );

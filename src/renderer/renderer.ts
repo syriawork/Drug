@@ -3774,6 +3774,40 @@ async function submitSettingsSave(): Promise<void> {
   if (settingsSaveInFlight) {
     return;
   }
+  settingsSaveInFlight = true;
+  setDisabled(ELEMENT_IDS.settingsSave, true);
+  try {
+    const minDaysEl = document.getElementById(ELEMENT_IDS.settingsMinDays);
+    const fridayEl = document.getElementById(ELEMENT_IDS.settingsFriday);
+    const startEl = document.getElementById(ELEMENT_IDS.settingsStartTime);
+    const endEl = document.getElementById(ELEMENT_IDS.settingsEndTime);
+    const minDays = minDaysEl ? Number(minDaysEl.value) : '';
+    const friday = fridayEl ? fridayEl.checked : false;
+    const start = startEl ? startEl.value : '';
+    const end = endEl ? endEl.value : '';
+    const draft: AppSettingsViewDraft = {
+      minDaysBetweenOrders: minDays,
+      allowFridayOrders: friday,
+      startTime: start,
+      endTime: end,
+    };
+    const result = await drugManager.settings.save(draft);
+    if (!result.ok) {
+      setErrorMessage(result.error ?? 'Save failed');
+      return;
+    }
+    await loadSettings('saving');
+  } catch (e) {
+    setErrorMessage(e instanceof Error ? e.message : 'Save failed');
+  } finally {
+    settingsSaveInFlight = false;
+    setDisabled(ELEMENT_IDS.settingsSave, false);
+  }
+}
+async function submitSettingsSave(): Promise<void> {
+  if (settingsSaveInFlight) {
+    return;
+  }
   const api = getDrugManagerApi();
   if (api === null) {
     setSettingsState('error', BRIDGE_UNAVAILABLE_MESSAGE);

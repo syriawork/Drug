@@ -230,6 +230,7 @@ describe('Stage 13 requirement 10: the page holds nothing after sign-out', () =>
 });
 
 /** Stage 13 requirement 12: the settings save form. */
+/// UNIQUE_FIRST_SAVE_MARKER
 
 /* The page now has a save form for the four editable fields
  * (minDaysBetweenOrders, allowFridayOrders, startTime, endTime).
