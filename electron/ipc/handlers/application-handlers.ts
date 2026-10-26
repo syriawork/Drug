@@ -37,7 +37,7 @@ import { applicationFailureFrom } from '../../application';
 import { IPC_CHANNELS } from '../channels';
 
 /** The shape of an `ipcMain.handle` listener, with the event untyped on purpose. */
-export type IpcHandler = (event: unknown, payload: unknown) => unknown;
+export type IpcHandler = (event: unknown, payload: unknown) => Promise<ApplicationResult<unknown>>;
 
 /** One entry per registered channel, keyed by channel name. */
 export type IpcHandlerMap = Readonly<Record<string, IpcHandler>>;

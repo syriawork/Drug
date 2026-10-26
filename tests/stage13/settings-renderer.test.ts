@@ -269,7 +269,20 @@ describe('Stage 13 requirement 12: the settings save form', () => {
     assert.ok(saveCalls.length > 0, 'saveSettings IPC must have been called');
 
     // The save payload must contain exactly the four editable fields.
-    const savePayload = saveCalls[0][1];
+// Get the actual args array from the bridge recording, not the arg count.
+  const saveArgIndex = harness.calls.findIndex(
+    (call) => call.name === 'settings.save'
+  );
+  // The settings.save call must have been recorded by the bridge.
+  assert.ok(saveArgIndex !== -1, 'settings.save IPC call must have been made');
+  // The renderer sends exactly one argument — an object with the four editable fields.
+  const savePayload = harness.calls[saveArgIndex].args[0] as {
+    readonly minDaysBetweenOrders: number;
+    readonly allowFridayOrders: boolean;
+    readonly startTime: string;
+    readonly endTime: string;
+  };
+//
     assert.equal(savePayload.minDaysBetweenOrders, 7);
     assert.equal(savePayload.allowFridayOrders, true);
     assert.equal(savePayload.startTime, '07:30');

@@ -365,28 +365,10 @@ export interface RendererHarness {
   submitLogin(email: string, password: string): Promise<void>;
   clickLogout(): Promise<void>;
   clickPasswordToggle(): void;
+  clickNav: (view: string) => void;
 /** Clicks the save action on the settings page and settles. */
-clickSettingsSave: (): Promise<void> => {
-  const btn = document.getElementById(ELEMENT_IDS.settingsSave);
-  if (btn && !btn.disabled) {
-    btn.click();
-  }
-  return Promise.resolve();
-},
-async clickSettingsSave(): Promise<void> {
-  const btn = document.getElementById(ELEMENT_IDS.settingsSave);
-  if (btn && !btn.disabled) {
-    btn.click();
-  }
-}
-  clickNav(view: string): void;
-async clickSettingsSave(): Promise<void> {
-  const btn = document.getElementById(ELEMENT_IDS.settingsSave);
-  if (btn && !btn.disabled) {
-    btn.click();
-  }
-}
-  clickNav(view: string): void;
+clickSettingsSave(): Promise<void>;
+  
   /** Opens the users page and settles the load it triggers. */
   openUsers(): Promise<void>;
   /** Types into the search box and settles; sends no request. */
