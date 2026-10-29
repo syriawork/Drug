@@ -1325,6 +1325,11 @@ export async function createRendererHarness(
     clickPasswordToggle: (): void => {
       element('password-toggle').dispatchEvent(new FakeEvent('click'));
     },
+    clickSettingsSave: async (): Promise<void> => {
+      const button = element('settings-save');
+      button.dispatchEvent(new FakeEvent('click'));
+      await settle();
+    },
     clickNav: (view: string): void => {
       const button = document.querySelectorAll('[data-view]')
         .find((candidate) => candidate.getAttribute('data-view') === view);

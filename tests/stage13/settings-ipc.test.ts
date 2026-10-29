@@ -252,6 +252,7 @@ describe('Stage 13 requirement 12: the settings.save channel', () => {
   it('the save handler merges only the four editable fields', async () => {
     const handlers = handlersOver(new FakeSettingsRepository(STORED));
     const saveHandler = handlers[IPC_CHANNELS.settingsSave];
+    assert.ok(saveHandler !== undefined, 'settings.save handler must exist');
 
     // Invoke with the four editable fields plus extra noise.
     const outcome = await saveHandler(
@@ -276,6 +277,7 @@ describe('Stage 13 requirement 12: the settings.save channel', () => {
     const repository = new FakeSettingsRepository(STORED);
     const handlers = handlersOver(repository);
     const saveHandler = handlers[IPC_CHANNELS.settingsSave];
+    assert.ok(saveHandler !== undefined, 'settings.save handler must exist');
 
     // minDaysBetweenOrders out of range.
     const outcome = await saveHandler(
@@ -291,6 +293,7 @@ describe('Stage 13 requirement 12: the settings.save channel', () => {
     const repository = new FakeSettingsRepository(STORED);
     const handlers = handlersOver(repository);
     const saveHandler = handlers[IPC_CHANNELS.settingsSave];
+    assert.ok(saveHandler !== undefined, 'settings.save handler must exist');
 
     const outcome = await saveHandler(
       {},
@@ -305,6 +308,8 @@ describe('Stage 13 requirement 12: the settings.save channel', () => {
     const repository = new FakeSettingsRepository(STORED);
     const handlers = handlersOver(repository);
     const saveHandler = handlers[IPC_CHANNELS.settingsSave];
+
+    assert.ok(saveHandler !== undefined, 'settings.save handler must exist');
 
     const outcome = await saveHandler(
       {},

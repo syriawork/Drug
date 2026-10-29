@@ -20,7 +20,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createRendererHarness, type FakeSafeAuthState } from '../stage8/helpers/renderer-harness';
+import { ApiCall, createRendererHarness, type FakeSafeAuthState } from '../stage8/helpers/renderer-harness';
 
 type Harness = Awaited<ReturnType<typeof createRendererHarness>>;
 
@@ -275,13 +275,20 @@ describe('Stage 13 requirement 12: the settings save form', () => {
   );
   // The settings.save call must have been recorded by the bridge.
   assert.ok(saveArgIndex !== -1, 'settings.save IPC call must have been made');
-  // The renderer sends exactly one argument — an object with the four editable fields.
-  const savePayload = harness.calls[saveArgIndex].args[0] as {
+// Extract the renderer's single save argument with explicit TypeScript-typed array reference.
+// The args field is readonly unknown[] per the ApiCall interface at renderer-harness.ts:28.
+  const saveCall: ApiCall = harness.calls[saveArgIndex]!;
+// The assertion above guarantees saveArgIndex is a valid index.
+const args: readonly unknown[] = saveCall.args;
+// Validate the argument structure using the project's assertion convention — ensure at least
+  // one argument exists, which the renderer sends as the payload object.
+  assert.ok(args.length >= 1, 'settings.save must supply at least one argument');
+// The payload object is the single argument; its shape is verified at runtime.
+  const savePayload = args[0] as {
     readonly minDaysBetweenOrders: number;
     readonly allowFridayOrders: boolean;
     readonly startTime: string;
-    readonly endTime: string;
-  };
+    readonly endTime: string };
 //
     assert.equal(savePayload.minDaysBetweenOrders, 7);
     assert.equal(savePayload.allowFridayOrders, true);
@@ -359,7 +366,14 @@ describe('Stage 13 requirement 12: the settings save form', () => {
     assert.ok(saveCalls.length > 0, 'saveSettings IPC must have been called');
 
     // The save payload must contain exactly the four editable fields.
-    const savePayload = saveCalls[0][1];
+// Extract the payload object from the recorded harness call.
+    const saveCall = harness.calls.find((call) => call.name === 'settings.save');
+    assert.ok(saveCall !== undefined, 'settings.save call must exist in harness.calls');
+    const savePayload = saveCall.args[0] as {
+      readonly minDaysBetweenOrders: number;
+      readonly allowFridayOrders: boolean;
+      readonly startTime: string;
+      readonly endTime: string };
     assert.equal(savePayload.minDaysBetweenOrders, 7);
     assert.equal(savePayload.allowFridayOrders, true);
     assert.equal(savePayload.startTime, '07:30');
