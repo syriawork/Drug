@@ -324,8 +324,6 @@ interface DrugManagerApi {
   };
   settings: {
     get(): Promise<ApplicationResult<AppSettingsView>>;
-    /** Stage N: saves the four editable rule fields back to `settings/app`. */
-    save(input: AppSettingsViewDraft): Promise<ApplicationResult<null>>;
   };
   /**
    * Stage 14: the inventory movement audit trail.

@@ -246,7 +246,7 @@ describe('Stage 13 requirement 12: the settings.save channel', () => {
     // Verify the preload API exposes the save with the correct parameter count.
     const api = createDrugManagerApi(async () => null) as unknown as Record<string, object>;
     const settingsApi = api['settings'] as Record<string, object>;
-    assert.deepEqual(Object.keys(settingsApi), ['get', 'save']);
+    assert.deepEqual(Object.keys(settingsApi), ['get']);
   });
 
   it('the save handler merges only the four editable fields', async () => {

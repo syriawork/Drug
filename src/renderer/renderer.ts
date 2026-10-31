@@ -234,7 +234,6 @@ let orderHistoryMovementsGeneration = 0;
 // sign-out for the same reason: it belongs to the session that ended.
 let loadedAppSettings: AppSettingsView | null = null;
 let settingsInFlight = false;
-let settingsSaveInFlight = false;
 let ordersHistoryInFlight = false;
 let ordersHistoryLoadMoreInFlight = false;
 let ordersHistoryHasMore = false;
@@ -575,7 +574,6 @@ medicineAddInbound: 'medicine-add-inbound',
   settingsEndTime: 'settings-end-time',
   settingsMaxDaily: 'settings-max-daily',
   settingsAssistant: 'settings-assistant',
-  settingsSave: 'settings-save',
 // Stage 14: the movement audit page. DISPLAY targets only - there is deliberately
 // no `stockSave` id here, because a control that could change a movement would be
 // a second, unaudited way to move stock.
@@ -856,24 +854,11 @@ function showLogin(message: string | null = null): void {
   // would claim a state that no longer belongs to anybody.
   loadedAppSettings = null;
   settingsInFlight = false;
-  settingsSaveInFlight = false;
-  // The editable controls are cleared by resetting their value, not their text.
-  const minDaysInput = document.getElementById(ELEMENT_IDS.settingsMinDays) as HTMLInputElement | null;
-  if (minDaysInput !== null) {
-    minDaysInput.value = '';
-  }
-  const fridayInput = document.getElementById(ELEMENT_IDS.settingsFriday) as HTMLSelectElement | null;
-  if (fridayInput !== null) {
-    fridayInput.value = '';
-  }
-  const startTimeInput = document.getElementById(ELEMENT_IDS.settingsStartTime) as HTMLInputElement | null;
-  if (startTimeInput !== null) {
-    startTimeInput.value = '';
-  }
-  const endTimeInput = document.getElementById(ELEMENT_IDS.settingsEndTime) as HTMLInputElement | null;
-  if (endTimeInput !== null) {
-    endTimeInput.value = '';
-  }
+  // All six read-only display values are cleared as text.
+  setText(ELEMENT_IDS.settingsMinDays, '');
+  setText(ELEMENT_IDS.settingsFriday, '');
+  setText(ELEMENT_IDS.settingsStartTime, '');
+  setText(ELEMENT_IDS.settingsEndTime, '');
   setText(ELEMENT_IDS.settingsMaxDaily, '');
   setText(ELEMENT_IDS.settingsAssistant, '');
   setHidden(ELEMENT_IDS.settingsNotConfigured, true);
@@ -1524,9 +1509,7 @@ function attachHandlers(): void {
   document.getElementById(ELEMENT_IDS.settingsRetry)?.addEventListener('click', () => {
     void loadSettings('loading');
   });
-  document.getElementById(ELEMENT_IDS.settingsSave)?.addEventListener('click', () => {
-    void submitSettingsSave();
-  });
+
 
   // Stage 14: the movement audit page. Refresh and retry are the ONLY actions, and
   // both merely re-read. The page owns no write, so there is nothing to intercept.
@@ -3672,6 +3655,14 @@ function applyOrderHistoryStatusFilter(value: string): void {
 function renderSettings(): void {
   const settings = loadedAppSettings;
   if (settings === null) {
+    // Clear all displayed values on logout/reset.
+    setText(ELEMENT_IDS.settingsMinDays, '');
+    setText(ELEMENT_IDS.settingsFriday, '');
+    setText(ELEMENT_IDS.settingsStartTime, '');
+    setText(ELEMENT_IDS.settingsEndTime, '');
+    setText(ELEMENT_IDS.settingsMaxDaily, '');
+    setText(ELEMENT_IDS.settingsAssistant, '');
+    setHidden(ELEMENT_IDS.settingsNotConfigured, true);
     return;
   }
 
@@ -3681,25 +3672,11 @@ function renderSettings(): void {
   // read the wrong thing into this page.
   setHidden(ELEMENT_IDS.settingsNotConfigured, settings.configured);
 
-  // Editable controls - set their value, not their text content.
-  const minDays = document.getElementById(ELEMENT_IDS.settingsMinDays) as HTMLInputElement | null;
-  if (minDays !== null) {
-    minDays.value = String(settings.minDaysBetweenOrders);
-  }
-  const friday = document.getElementById(ELEMENT_IDS.settingsFriday) as HTMLSelectElement | null;
-  if (friday !== null) {
-    friday.value = String(settings.allowFridayOrders);
-  }
-  const startTime = document.getElementById(ELEMENT_IDS.settingsStartTime) as HTMLInputElement | null;
-  if (startTime !== null) {
-    startTime.value = settings.startTime;
-  }
-  const endTime = document.getElementById(ELEMENT_IDS.settingsEndTime) as HTMLInputElement | null;
-  if (endTime !== null) {
-    endTime.value = settings.endTime;
-  }
-
-  // Read-only display values for the two dead fields.
+  // Read-only display values for all six stored settings.
+  setText(ELEMENT_IDS.settingsMinDays, String(settings.minDaysBetweenOrders));
+  setText(ELEMENT_IDS.settingsFriday, booleanLabel(settings.allowFridayOrders));
+  setText(ELEMENT_IDS.settingsStartTime, settings.startTime);
+  setText(ELEMENT_IDS.settingsEndTime, settings.endTime);
   setText(ELEMENT_IDS.settingsMaxDaily, String(settings.maxDailyOrders));
   setText(ELEMENT_IDS.settingsAssistant, settings.assistantId);
 }
@@ -3717,7 +3694,6 @@ function setSettingsState(state: UsersViewState, message: string): void {
   setHidden(ELEMENT_IDS.settingsRetry, state !== 'error');
   const busy = state === 'loading' || state === 'refreshing';
   setDisabled(ELEMENT_IDS.settingsRefresh, busy);
-  setDisabled(ELEMENT_IDS.settingsSave, busy || settingsSaveInFlight);
 }
 
 /**
@@ -3770,70 +3746,3 @@ async function loadSettings(reason: 'loading' | 'refreshing'): Promise<void> {
  * `api.settings.save`. The two dead fields are never included: they are
  * preserved by the service layer from the stored document.
  */
-async function submitSettingsSave(): Promise<void> {
-  if (settingsSaveInFlight) {
-    return;
-  }
-  const api = getDrugManagerApi();
-  if (api === null) {
-    setSettingsState('error', BRIDGE_UNAVAILABLE_MESSAGE);
-    return;
-  }
-
-  const minDaysInput = document.getElementById(ELEMENT_IDS.settingsMinDays) as HTMLInputElement | null;
-  const fridayInput = document.getElementById(ELEMENT_IDS.settingsFriday) as HTMLSelectElement | null;
-  const startTimeInput = document.getElementById(ELEMENT_IDS.settingsStartTime) as HTMLInputElement | null;
-  const endTimeInput = document.getElementById(ELEMENT_IDS.settingsEndTime) as HTMLInputElement | null;
-
-  const minDays = Number.parseInt(minDaysInput?.value ?? '', 10);
-  const allowFriday = fridayInput?.value === 'true';
-  const startTime = startTimeInput?.value ?? '';
-  const endTime = endTimeInput?.value ?? '';
-
-  if (!Number.isFinite(minDays) || minDays < 1 || minDays > 365) {
-    setSettingsState('error', 'أقل عدد أيام بين الطلبات يجب أن يكون عددًا صحيحًا بين 1 و 365.');
-    return;
-  }
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)) {
-    setSettingsState('error', 'بداية دوام الطلبات يجب أن تكون بالصيغة HH:mm.');
-    return;
-  }
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime)) {
-    setSettingsState('error', 'نهاية دوام الطلبات يجب أن تكون بالصيغة HH:mm.');
-    return;
-  }
-
-  const draft = {
-    minDaysBetweenOrders: minDays,
-    allowFridayOrders: allowFriday,
-    startTime,
-    endTime,
-  };
-
-  settingsSaveInFlight = true;
-  setDisabled(ELEMENT_IDS.settingsSave, true);
-  setSettingsState('saving', 'جارٍ حفظ الإعدادات…');
-
-  let result: ApplicationResult<null>;
-  try {
-    result = await api.settings.save(draft);
-  } catch (error: unknown) {
-    settingsSaveInFlight = false;
-    setDisabled(ELEMENT_IDS.settingsSave, false);
-    setSettingsState('error', 'تعذر حفظ الإعدادات. يُرجى المحاولة مرة أخرى.');
-    return;
-  }
-  settingsSaveInFlight = false;
-
-  if (!result.ok) {
-    setDisabled(ELEMENT_IDS.settingsSave, false);
-    setSettingsState('error', result.error.message);
-    return;
-  }
-
-  // Refresh from the server so the screen shows what was actually stored.
-  settingsInFlight = false;
-  await loadSettings('refreshing');
-  setDisabled(ELEMENT_IDS.settingsSave, false);
-  setSettingsState('ready', 'تم حفظ الإعدادات.');
-}

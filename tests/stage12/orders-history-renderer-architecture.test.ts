@@ -25,6 +25,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
+import { assertSettingsFieldsAreOnlyRendered } from '../helpers/settings-field-guard';
 
 const projectRoot = join(__dirname, '..', '..', '..');
 
@@ -150,46 +151,8 @@ function scannedArtifacts(): readonly string[] {
  * to a function this cannot classify is not something this test allows.
  */
 function assertFieldsAreReadOnly(): void {
-  const code = stripComments(readProjectFile(join('src', 'renderer', 'renderer.ts')));
-
-  for (const field of SETTINGS_FIELD_VOCABULARY) {
-    // Every occurrence must be a MEMBER READ: `<something>.<field>`. A bare
-    // identifier would mean a local variable or a declaration, which is where a
-    // computed copy - and then a decision from it - would begin.
-    const occurrences = [...code.matchAll(new RegExp(`[\\w.]+\\.${field}\\b`, 'g'))];
-    assert.equal(
-      occurrences.length >= 1,
-      true,
-      `"${field}" should be displayed, so it must appear as a property read`,
-    );
-    for (const occurrence of occurrences) {
-      const line = code.slice(0, occurrence.index);
-      const lineStart = Math.max(line.lastIndexOf('\n'), 0);
-      const text = code.slice(lineStart, code.indexOf('\n', occurrence.index));
-
-      // An assignment to the field is the shape a write starts from.
-      assert.equal(
-        new RegExp(`\\.${field}\\s*(=[^=]|\\+=|-=|\\+\\+|--)`).test(text),
-        false,
-        `"${field}" must not be assigned to in the renderer`,
-      );
-      // A comparison turns a displayed value into a decision.
-      for (const operator of ['===', '!==', '>=', '<=', '>', '<', '==', '!=']) {
-        assert.equal(
-          text.includes(`${operator} settings.${field}`) || text.includes(`settings.${field} ${operator}`),
-          false,
-          `"${field}" must not be compared in the renderer`,
-        );
-      }
-      // An argument to something other than the two presentational helpers is not
-      // something this test can classify as rendering, so it is rejected.
-      assert.equal(
-        /\(\s*(?!string\(|booleanLabel\()[^)]*settings\./.test(text) && !text.includes('setText'),
-        false,
-        `"${field}" must only be passed to a text renderer`,
-      );
-    }
-  }
+  const code = stripComments(readProjectFile(join("src", "renderer", "renderer.ts")));
+  assertSettingsFieldsAreOnlyRendered(code, SETTINGS_FIELD_VOCABULARY, "source renderer.ts");
 }
 
 /** Asserts that no renderer artefact contains any of the given vocabulary. */
@@ -590,3 +553,5 @@ describe('Stage 12: the history page filters locally and re-queries nothing', ()
     }
   });
 });
+
+

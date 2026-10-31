@@ -111,11 +111,6 @@ export function createDrugManagerApi(invoke: InvokeFunction): DrugManagerApi {
         const response = await invoke(IPC_CHANNELS.settingsGet);
         return response as ApplicationResult<AppSettingsView>;
       },
-      // Stage N: saves the four editable rule fields back to `settings/app`.
-      save: async (input: AppSettingsViewDraft): Promise<ApplicationResult<null>> => {
-        const response = await invoke(IPC_CHANNELS.settingsSave, input);
-        return response as ApplicationResult<null>;
-      },
     },
     // Stage 14: the READ-ONLY inventory movement audit trail.
     //
