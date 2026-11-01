@@ -148,8 +148,13 @@ export function validateFirebaseAuthEndpoints(config: FirebaseAuthConfig): void 
 /** Validates configuration before issuing requests. */
 export function validateFirebaseAuthConfig(config: FirebaseAuthConfig): void {
   validateFirebaseAuthEndpoints(config);
-  if (config.emulatorHost === undefined && config.apiKey.trim().length === 0) {
-    throw new FirebaseConfigError('FIREBASE_API_KEY is required when not using an emulator');
+  if (config.emulatorHost === undefined) {
+    if (config.apiKey.trim().length === 0) {
+      throw new FirebaseConfigError('FIREBASE_API_KEY is required when not using an emulator');
+    }
+    if (config.projectId.trim().length === 0) {
+      throw new FirebaseConfigError('FIREBASE_PROJECT_ID is required when not using an emulator');
+    }
   }
 }
 

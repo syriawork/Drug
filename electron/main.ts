@@ -2,8 +2,8 @@ import { app, BrowserWindow, ipcMain, session } from 'electron';
 import { join } from 'node:path';
 import { createManagerApplication } from './application';
 import { APP_DEFAULTS, createAppConfig } from './config/app-config';
-import { resolveFirebaseAuthConfig } from './config/firebase-config';
-import { resolveFirestoreRestConfig } from './config/firestore-config';
+import { createFirebaseClients } from './config/firebase-bootstrap';
+
 import { DRUG_MANAGER_API_VERSION } from './ipc/api';
 import { IPC_CHANNELS } from './ipc/channels';
 import { createIpcHandlers } from './ipc/handlers/application-handlers';
@@ -72,24 +72,15 @@ const config = createAppConfig({
   defaults: APP_DEFAULTS,
 });
 
-const firebaseAuthConfig = resolveFirebaseAuthConfig(isDevelopment ? 'development' : 'production');
-const authService = new FirebaseAuthService(firebaseAuthConfig);
-
-/**
- * Stage 3: Firestore REST access layer.
- *
- * The client is bound to the authentication layer and receives a fresh Firebase
- * ID token from it for every request (`getValidIdToken`), so Firebase Security
- * Rules always see `request.auth.uid` of the signed-in user. Tokens stay inside
- * this process: nothing Firestore-related is exposed over IPC.
- *
- * No request is issued at start-up; it is deliberately lazy so the foundation
- * self-test keeps running without any network access.
- */
-const firestoreClient = new FirestoreRestClient({
-  config: resolveFirestoreRestConfig(),
-  getAccessToken: () => authService.getValidIdToken(),
-});
+const { authService, firestoreClient } = createFirebaseClients(
+  isDevelopment,
+  process.env,
+  (firebaseAuthConfig) => new FirebaseAuthService(firebaseAuthConfig),
+  (firestoreConfig, auth) => new FirestoreRestClient({
+    config: firestoreConfig,
+    getAccessToken: () => (auth as FirebaseAuthService).getValidIdToken(),
+  }),
+);
 
 /**
  * Stage 7: the application layer, wired to the repositories.

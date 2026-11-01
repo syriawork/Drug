@@ -1,0 +1,5 @@
+{
+  "firestore": {
+    "rules": "emulator-lab/firestore.rules"
+  }
+}

@@ -267,3 +267,47 @@ drug-manager/
 يقرأ سجل المدير أول صفحة بحد أقصى 500 طلب، ثم يتيح **تحميل المزيد** عند الطلب. يحتفظ Main Process برمز الاستمرار ولا يرسله إلى Renderer؛ وتبقى عوامل البحث والحالة محلية على جميع الصفحات المحمّلة. يبدأ التحديث نافذة جديدة، ويحافظ فشل الصفحة التالية على النتائج السابقة ويسمح بإعادة المحاولة. لا يضمن Firestore REST ترتيبًا زمنيًا أو لقطة متسقة بين الصفحات؛ لذلك تقتصر الطباعة على البيانات المحمّلة حاليًا. للتحقق: `npm run test:stage23` مع `npm run test:stage12`, `npm run test:stage19`, `npm run test:stage20`, `npm run test:stage21`, و`npm run test:stage22`.
 
 التفاصيل المعمارية الكاملة — ملكية رمز الاستمرار، حارس المالك، حماية الحلقة اللانهائية، وخريطة الأخطاء — في `docs/stage23-orders-history-pagination.md`.
+
+
+## بيئة التشغيل والتكوين (Environment Configuration)
+
+### وضع التشغيل (Development vs Production)
+
+- وضع التشغيل يُحدد بواسطة pp.isPackaged (Electron):
+  - **وضع التطوير (Development):** عند تشغيل التطبيق من المصدر (npm run development). isDevelopment = true.
+  - **وضع الإنتاج (Production):** عند تشغيل التطبيق المُثبَّت (packaged). isDevelopment = false.
+- وضع التطوير: يستخدم محاكي Firebase Auth و Firestore (loopback only).
+- وضع الإنتاج: يتطلب متغيرات البيئة FIREBASE_API_KEY و FIREBASE_PROJECT_ID (غير فارغة).
+
+### متغيرات البيئة (Environment Variables)
+
+انظر .env.example لقائمة كاملة. المتغيرات المطلوبة للإنتاج:
+- FIREBASE_API_KEY (مطلوب في الإنتاج)
+- FIREBASE_PROJECT_ID (مطلوب في الإنتاج)
+- FIRESTORE_ALLOW_REMOTE_TARGET=true (مطلوب для الوصول إلى Firebase الإنتاج)
+
+متغيرات اختيارية (محاكي):
+- FIREBASE_AUTH_EMULATOR_HOST (loopback only)
+- FIRESTORE_EMULATOR_HOST (loopback only)
+
+### قيود أمان (Security Constraints)
+
+- **لا تستخدم بيانات اعتماد إنتاج Firebase lors de tests de développement.**
+- **لا تفعّل FIRESTORE_ALLOW_REMOTE_TARGET casually.**
+- **لا تفترض أن قواعد Firestore للمحاكي منشورة في الإنتاج.**
+- محاكي Firebase Auth و Firestore يجب أن يكونا مفعّلين معًا أو معطّلين معًا (cross-validation).
+- points d'accès distants sont bloqués par défaut (loopback-only).
+
+### قائمة التحقق قبل الإنتاج (Pre-Startup Checklist)
+
+1. [ ] التطبيق مُعبأ (packaged) — pp.isPackaged === true
+2. [ ] FIREBASE_API_KEY مُعيَّن (غير فارغ)
+3. [ ] FIREBASE_PROJECT_ID مُعيَّن (غير فارغ)
+4. [ ] FIRESTORE_ALLOW_REMOTE_TARGET=true (للإنتاج فقط)
+5. [ ] Auth Emulator و Firestore Emulator كلاهما مفعّل أو كلاهما معطّل
+6. [ ] نقاط النهاية HTTPS (FIREBASE_AUTH_BASE_URL, FIREBASE_TOKEN_BASE_URL)
+7. [ ] قواعد Firestore منشورة ومُتحقَّق منها في الإنتاج
+8. [ ] نسخ احتياطي (backup) وآلية استرداد (recovery) جاهزة
+9. [ ] لا توجد بيانات اعتماد إنتاج في بيئة التطوير
+
+**ملاحظة:** إنشاء .env.example لا يحمّل متغيرات البيئة تلقائيًا. التطبيق يقرأ process.env مباشرة في وقت التشغيل.

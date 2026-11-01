@@ -6,6 +6,11 @@ emulator-lab/tools/node_modules/
 emulator-lab/tools/*.log
 emulator-lab/tools/install.done
 emulator-lab/artifacts/
+# Local environment files (never commit)
+.env
+.env.*
+!.env.example
+!.env.template
 
 # Runtime logs the emulators and installers write at the project root
 /firestore-debug.log

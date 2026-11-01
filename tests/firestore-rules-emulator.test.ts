@@ -1742,6 +1742,118 @@ describe('Stage 3 - Firestore REST on the REAL emulators, authorized by the Andr
 
   // ============================================================= evidence report
 
+  // ================================================================ REGRESSION HARDENING (Stage 32B)
+
+  describe('default-deny for unmatched paths (Stage 32B)', () => {
+    it('denies unauthenticated access to an unmatched collection path', async () => {
+      const raw = await harness.rawRequest('unmatched_collection/doc-1', { method: 'GET', token: null });
+      // The rules must deny with 401 or 403
+      if (raw.status < 400) {
+        throw new Error(`Expected denial but got HTTP ${raw.status}`);
+      }
+    });
+
+    it('denies authenticated employee access to an unmatched collection path', async () => {
+      await expectDenied(
+        'employeeA GET unmatched_collection/doc-1',
+        'employeeA',
+        'GET unmatched_collection/doc-1',
+        employeeA.client.getDocument('unmatched_collection/doc-1'),
+      );
+    });
+
+    it('denies admin access to an unmatched collection path', async () => {
+      await expectDenied(
+        'admin GET unmatched_collection/doc-1',
+        'admin',
+        'GET unmatched_collection/doc-1',
+        admin.client.getDocument('unmatched_collection/doc-1'),
+      );
+    });
+  });
+
+  describe('employee cannot write protected medicine documents (Stage 32B)', () => {
+    it('denies employee creating a medicine document', async () => {
+      await expectDenied(
+        'employeeA creates medicines/med-employee-attempt',
+        'employeeA',
+        'POST medicines?documentId=med-employee-attempt',
+        employeeA.client.createDocument('medicines', { name: 'Test', stock: 10 }, 'med-employee-attempt'),
+      );
+    });
+
+    it('denies employee updating a medicine document', async () => {
+      await expectDenied(
+        'employeeA updates medicines/med-1',
+        'employeeA',
+        'PATCH medicines/med-1',
+        employeeA.client.patchDocument('medicines/med-1', { name: 'Hacked' }),
+      );
+    });
+
+  });
+
+  describe('employee cannot write stock_logs (Stage 32B)', () => {
+    it('denies employee creating a stock_log', async () => {
+      await expectDenied(
+        'employeeA creates stock_logs/forbidden-tx',
+        'employeeA',
+        'POST stock_logs?documentId=forbidden-tx',
+        employeeA.client.createDocument('stock_logs', { medicineId: 'med-1', delta: -1 }, 'forbidden-tx'),
+      );
+    });
+
+    it('denies employee updating a stock_log', async () => {
+      await expectDenied(
+        'employeeA updates stock_logs/log-1',
+        'employeeA',
+        'PATCH stock_logs/log-1',
+        employeeA.client.patchDocument('stock_logs/log-1', { delta: 999 }),
+      );
+    });
+
+  });
+
+  describe('employee cannot elevate own role or approval status (Stage 32B)', () => {
+    it('denies employee changing own role to admin', async () => {
+      await expectDenied(
+        'employeeA PATCH users/self {role: admin}',
+        'employeeA',
+        `PATCH users/${employeeAUid} {role: admin}`,
+        employeeA.client.patchDocument(`users/${employeeAUid}`, { role: 'admin' }),
+      );
+    });
+
+    it('denies employee approving own account', async () => {
+      await expectDenied(
+        'employeeA PATCH users/self {status: approved}',
+        'employeeA',
+        `PATCH users/${employeeAUid} {status: approved}`,
+        employeeA.client.patchDocument(`users/${employeeAUid}`, { status: 'approved' }),
+      );
+    });
+  });
+
+  describe('assistant-admin role equivalence (Stage 32B)', () => {
+    it('assistant can create a medicine document (admin-equivalent)', async () => {
+      await expectAllowed(
+        'assistant creates medicines/med-assistant-created',
+        'assistant',
+        'POST medicines?documentId=med-assistant-created',
+        assistant.client.createDocument('medicines', { name: 'Assistant Med', stock: 5 }, 'med-assistant-created'),
+      );
+    });
+
+    it('assistant can write stock_logs (admin-equivalent)', async () => {
+      await expectAllowed(
+        'assistant creates stock_logs/log-assistant-equiv',
+        'assistant',
+        'POST stock_logs?documentId=log-assistant-equiv',
+        assistant.client.createDocument('stock_logs', { medicineId: 'med-1', delta: -1, actorUid: assistantUid }, 'log-assistant-equiv'),
+      );
+    });
+  });
+
   describe('evidence report', () => {
     it('every rules decision observed during the run matched the expectation', (context) => {
       const mismatched = observedDecisions.filter((decision) => !decision.matched);
