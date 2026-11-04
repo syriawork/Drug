@@ -1,4 +1,11 @@
 {
+  "functions": [
+    {
+      "source": "../functions",
+      "codebase": "drug-manager-functions",
+      "runtime": "nodejs24"
+    }
+  ],
   "firestore": {
     "rules": "firestore.rules"
   },
@@ -10,6 +17,18 @@
     "firestore": {
       "host": "127.0.0.1",
       "port": 8080
+    },
+    "functions": {
+      "host": "127.0.0.1",
+      "port": 5001
+    },
+    "eventarc": {
+      "host": "127.0.0.1",
+      "port": 9299
+    },
+    "tasks": {
+      "host": "127.0.0.1",
+      "port": 9499
     },
     "ui": {
       "enabled": false

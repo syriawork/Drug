@@ -32,3 +32,8 @@ dist/
 .idea/
 Thumbs.db
 Desktop.ini
+
+
+# Packaged release artifacts (generated locally, never committed)
+release/
+release-qa/

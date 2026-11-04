@@ -1,8 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { FirebaseConfigError, resolveFirebaseAuthConfig, validateFirebaseAuthConfig } from "../../electron/config/firebase-config";
+import {
+  DEFAULT_EMULATOR_API_KEY,
+  DEFAULT_EMULATOR_PROJECT_ID,
+  FirebaseConfigError,
+  buildSignInWithPasswordUrl,
+  resolveFirebaseAuthConfig,
+  validateFirebaseAuthConfig,
+} from "../../electron/config/firebase-config";
 import { resolveAndValidateFirebaseConfig, createFirebaseClients } from "../../electron/config/firebase-bootstrap";
-import { resolveFirestoreRestConfig, isFirestoreConfigured } from "../../electron/config/firestore-config";
+import {
+  buildFirestoreDocumentsUrlPrefix,
+  resolveFirestoreRestConfig,
+  isFirestoreConfigured,
+} from "../../electron/config/firestore-config";
 
 describe("Firebase Auth config validation", () => {
   it("rejects missing API key in production mode", () => {
@@ -146,6 +157,95 @@ describe("Environment consistency", () => {
 
 
 describe("Firebase bootstrap (resolveAndValidateFirebaseConfig)", () => {
+  it("development mode preserves its existing emulator settings", () => {
+    const result = resolveAndValidateFirebaseConfig(true, {
+      FIREBASE_AUTH_EMULATOR_HOST: "localhost:9099",
+      FIREBASE_API_KEY: "development-emulator-key",
+      FIREBASE_PROJECT_ID: "development-demo",
+      FIRESTORE_EMULATOR_HOST: "localhost:8080",
+    }, false);
+
+    assert.equal(result.firebaseAuthConfig.mode, "development");
+    assert.equal(result.firebaseAuthConfig.emulatorHost, "localhost:9099");
+    assert.equal(result.firebaseAuthConfig.apiKey, "development-emulator-key");
+    assert.equal(result.firebaseAuthConfig.projectId, "development-demo");
+    assert.equal(result.firestoreConfig.emulatorHost, "localhost:8080");
+    assert.match(buildSignInWithPasswordUrl(result.firebaseAuthConfig), /^http:\/\/localhost:9099\//);
+  });
+
+  it("QA packaged mode permits paired local emulators and overrides production credentials", () => {
+    const result = resolveAndValidateFirebaseConfig(false, {
+      FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099",
+      FIREBASE_API_KEY: "production-key-must-not-be-used",
+      FIREBASE_PROJECT_ID: "production-project-must-not-be-used",
+      FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080",
+    }, true);
+
+    assert.equal(result.firebaseAuthConfig.mode, "production");
+    assert.equal(result.firebaseAuthConfig.allowFirebaseEmulators, true);
+    assert.equal(result.firebaseAuthConfig.apiKey, DEFAULT_EMULATOR_API_KEY);
+    assert.equal(result.firebaseAuthConfig.projectId, DEFAULT_EMULATOR_PROJECT_ID);
+    assert.equal(result.firestoreConfig.projectId, DEFAULT_EMULATOR_PROJECT_ID);
+    assert.match(buildSignInWithPasswordUrl(result.firebaseAuthConfig), /^http:\/\/127\.0\.0\.1:9099\//);
+    assert.equal(result.firestoreConfig.emulatorHost, "127.0.0.1:8080");
+    assert.match(
+      buildFirestoreDocumentsUrlPrefix(result.firestoreConfig),
+      /^http:\/\/127\.0\.0\.1:8080\/v1\/projects\/demo-drug-project\//,
+    );
+    assert.doesNotMatch(buildSignInWithPasswordUrl(result.firebaseAuthConfig), /production-key/);
+  });
+
+  it("QA mode defaults to local emulators and rejects non-loopback Auth hosts", () => {
+    const defaults = resolveAndValidateFirebaseConfig(false, {}, true);
+    assert.equal(defaults.firebaseAuthConfig.emulatorHost, "127.0.0.1:9099");
+    assert.equal(defaults.firestoreConfig.emulatorHost, "127.0.0.1:8080");
+
+    for (const host of ["auth.example.com:9099", "192.168.1.20:9099", "127.0.0.2:9099"]) {
+      assert.throws(() => resolveAndValidateFirebaseConfig(false, {
+        FIREBASE_AUTH_EMULATOR_HOST: host,
+        FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080",
+      }, true), FirebaseConfigError);
+    }
+  });
+
+  it("QA mode rejects non-loopback Firestore hosts and custom remote targets", () => {
+    for (const env of [
+      {
+        FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099",
+        FIRESTORE_EMULATOR_HOST: "firestore.example.com:8080",
+      },
+      {
+        FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099",
+        FIRESTORE_EMULATOR_HOST: "127.0.0.2:8080",
+      },
+      {
+        FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099",
+        FIRESTORE_BASE_URL: "https://firestore.googleapis.com/v1",
+        FIRESTORE_ALLOW_REMOTE_TARGET: "true",
+      },
+    ]) {
+      assert.throws(() => resolveAndValidateFirebaseConfig(false, env, true));
+    }
+  });
+
+  it("packaged production mode rejects emulator endpoints despite runtime QA variables", () => {
+    assert.throws(() => resolveAndValidateFirebaseConfig(false, {
+      QA_BUILD: "true",
+      DRUG_MANAGER_QA_BUILD: "1",
+      ALLOW_FIREBASE_EMULATORS: "true",
+      FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099",
+      FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080",
+    }), FirebaseConfigError);
+  });
+
+  it("packaged production mode rejects a Firestore Emulator target", () => {
+    assert.throws(() => resolveAndValidateFirebaseConfig(false, {
+      FIREBASE_API_KEY: "production-key",
+      FIREBASE_PROJECT_ID: "production-project",
+      FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080",
+    }));
+  });
+
   it("both valid local Emulators accepted", () => {
     const result = resolveAndValidateFirebaseConfig(true, {
       FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099",
@@ -360,4 +460,3 @@ describe("Firestore network prevention", () => {
     assert.equal(fetchCalled, true, "fetchImpl must be called for valid remote target with opt-in");
   });
 });
-

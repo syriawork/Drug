@@ -34,11 +34,21 @@ export const firebaseCliPath = join(
 );
 
 /** Demo project id: Firebase emulators accept "demo-*" ids without any login. */
-export const LAB_PROJECT_ID = process.env['LAB_PROJECT_ID'] ?? 'demo-drug-manager-stage3';
+const configuredProjectId = process.env['LAB_PROJECT_ID'] ?? 'demo-drug-manager-stage3';
+if (!configuredProjectId.startsWith('demo-')) {
+  throw new Error('LAB_PROJECT_ID must start with "demo-" to keep the emulator lab isolated');
+}
+export const LAB_PROJECT_ID = configuredProjectId;
 
 export const AUTH_EMULATOR_HOST = `127.0.0.1:${process.env['LAB_AUTH_PORT'] ?? '9099'}`;
 
 export const FIRESTORE_EMULATOR_HOST = `127.0.0.1:${process.env['LAB_FIRESTORE_PORT'] ?? '8080'}`;
+
+export const FUNCTIONS_EMULATOR_HOST = `127.0.0.1:${process.env['LAB_FUNCTIONS_PORT'] ?? '5001'}`;
+
+export const EVENTARC_EMULATOR_HOST = '127.0.0.1:9299';
+
+export const TASKS_EMULATOR_HOST = '127.0.0.1:9499';
 
 /** The compiled integration test that must be executed against the emulators. */
 export const integrationTestFile = join(

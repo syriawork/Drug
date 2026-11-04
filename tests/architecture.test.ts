@@ -29,7 +29,7 @@ interface PackageJsonShape {
 
 const packageJson = JSON.parse(readProjectFile('package.json')) as PackageJsonShape;
 
-const ALLOWED_DEV_DEPENDENCIES: readonly string[] = ['@types/node', 'electron', 'typescript'];
+const ALLOWED_DEV_DEPENDENCIES: readonly string[] = ['@types/node', 'electron', 'electron-builder', 'typescript'];
 
 const FORBIDDEN_DEPENDENCY_FRAGMENTS: readonly string[] = [
   'firebase',

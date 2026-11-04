@@ -254,7 +254,28 @@ describe('Stage 13 requirement 5: the settings surface offers read and write', (
       endTime: '17:00',
     });
     assert.equal(writeResult.ok, true);
-    assert.equal(repository.calls, 2, 'a second call for the save');
+    assert.equal(repository.calls, 3, 'one read plus a read-then-write save');
+  });
+
+  it('preserves mobile-managed protected fields across a save', async () => {
+    const repository = new FakeSettingsRepository(storedSettings());
+
+    const result = await applicationOver(repository).manager.saveSettings({
+      minDaysBetweenOrders: 7,
+      allowFridayOrders: true,
+      startTime: '09:00',
+      endTime: '18:00',
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(repository.calls, 2, 'save requires one read to preserve protected fields and one write');
+    const saved = repository.lastSaved;
+    assert.equal(saved?.minDaysBetweenOrders, 7);
+    assert.equal(saved?.allowFridayOrders, true);
+    assert.equal(saved?.startTime, '09:00');
+    assert.equal(saved?.endTime, '18:00');
+    assert.equal(saved?.maxDailyOrders, 42, 'maxDailyOrders must survive the save');
+    assert.equal(saved?.assistantId, 'EMP-777', 'assistantId must survive the save');
   });
 
   it('never sends the dead fields to the repository on save', async () => {
@@ -323,7 +344,7 @@ describe('Stage 13 requirement 5: the settings surface offers read and write', (
     });
 
     assert.equal(result.ok, true, '0 must be accepted as a valid minDaysBetweenOrders');
-    assert.equal(repository.calls, 1, '0 must reach the repository');
+    assert.equal(repository.calls, 2, '0 must reach the repository after preserving protected fields');
   });
 
   it('accepts values greater than 365 as minDaysBetweenOrders', async () => {
@@ -337,7 +358,7 @@ describe('Stage 13 requirement 5: the settings surface offers read and write', (
     });
 
     assert.equal(result.ok, true, '400 must be accepted as a valid minDaysBetweenOrders (no upper limit)');
-    assert.equal(repository.calls, 1, '400 must reach the repository');
+    assert.equal(repository.calls, 2, '400 must reach the repository after preserving protected fields');
   });
 
   it('rejects fractional minDaysBetweenOrders', async () => {

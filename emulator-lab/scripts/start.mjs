@@ -1,5 +1,5 @@
 /**
- * Starts the isolated local emulators (Auth + Firestore) in the foreground.
+ * Starts the isolated local emulators (Auth + Firestore + Functions) in the foreground.
  *
  * Usage: npm run emulator:start
  *
@@ -12,11 +12,14 @@ import { existsSync } from 'node:fs';
 
 import {
   AUTH_EMULATOR_HOST,
+  EVENTARC_EMULATOR_HOST,
   FIRESTORE_EMULATOR_HOST,
+  FUNCTIONS_EMULATOR_HOST,
   LAB_PROJECT_ID,
   assertLabIsInstalled,
   firebaseCliPath,
   labFirebaseConfigPath,
+  TASKS_EMULATOR_HOST,
 } from './lab-paths.mjs';
 
 assertLabIsInstalled();
@@ -29,6 +32,9 @@ console.log('[lab] starting emulators (isolated laboratory)');
 console.log(`[lab] project id          : ${LAB_PROJECT_ID}`);
 console.log(`[lab] auth emulator       : http://${AUTH_EMULATOR_HOST}`);
 console.log(`[lab] firestore emulator  : http://${FIRESTORE_EMULATOR_HOST}`);
+console.log(`[lab] functions emulator : http://${FUNCTIONS_EMULATOR_HOST}`);
+console.log(`[lab] Eventarc helper    : http://${EVENTARC_EMULATOR_HOST}`);
+console.log(`[lab] Cloud Tasks helper : http://${TASKS_EMULATOR_HOST}`);
 console.log(`[lab] rules               : ${labFirebaseConfigPath} -> firestore.rules`);
 console.log('[lab] press Ctrl+C to stop');
 
@@ -42,9 +48,13 @@ const child = spawn(
     '--project',
     LAB_PROJECT_ID,
     '--only',
-    'auth,firestore',
+    'auth,firestore,functions',
   ],
-  { stdio: 'inherit', cwd: labFirebaseConfigPath.replace(/[\\/]firebase\.json$/, '') },
+  {
+    stdio: 'inherit',
+    cwd: labFirebaseConfigPath.replace(/[\\/]firebase\.json$/, ''),
+    env: { ...process.env, METADATA_SERVER_DETECTION: 'none' },
+  },
 );
 
 child.on('exit', (code) => {

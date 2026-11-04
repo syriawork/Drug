@@ -12,6 +12,8 @@ export interface FirebaseAuthConfig {
   readonly mode: 'development' | 'production';
   readonly apiKey: string;
   readonly projectId: string;
+  /** Set only by the build-time QA capability in the main-process bootstrap. */
+  readonly allowFirebaseEmulators?: boolean | undefined;
   /** When defined, requests target the local Firebase Auth Emulator. */
   readonly emulatorHost?: string | undefined;
   /** HTTPS override on the official Identity Toolkit host, for production routing. */
@@ -32,18 +34,25 @@ export const DEFAULT_IDENTITY_TOOLKIT_BASE_URL = 'https://identitytoolkit.google
 
 /** Standard Google Secure Token v1 endpoint for refresh. */
 export const DEFAULT_SECURE_TOKEN_BASE_URL = 'https://securetoken.googleapis.com/v1';
+export const DEFAULT_EMULATOR_API_KEY = 'fake-emulator-api-key';
+export const DEFAULT_EMULATOR_PROJECT_ID = 'demo-drug-project';
 
 /**
  * Loads Firebase configuration for the explicit packaged/development mode.
  * Emulator routing is opt-in and mutually exclusive with production mode.
+ *
+ * @param allowFirebaseEmulators - When true, permits emulator endpoints even
+ *   when mode is 'production' (used only by the dedicated QA build).
+ *   Runtime environment variables cannot set this - it is baked at build time.
  */
 export function resolveFirebaseAuthConfig(
   mode: FirebaseAuthConfig['mode'],
   env: NodeJS.ProcessEnv = process.env,
+  allowFirebaseEmulators: boolean = false,
 ): FirebaseAuthConfig {
   const emulatorHost = env['FIREBASE_AUTH_EMULATOR_HOST']?.trim() || undefined;
-  const apiKey = env['FIREBASE_API_KEY']?.trim() || (emulatorHost ? 'fake-emulator-api-key' : '');
-  const projectId = env['FIREBASE_PROJECT_ID']?.trim() || (emulatorHost ? 'demo-drug-project' : '');
+  const apiKey = env['FIREBASE_API_KEY']?.trim() || (emulatorHost ? DEFAULT_EMULATOR_API_KEY : '');
+  const projectId = env['FIREBASE_PROJECT_ID']?.trim() || (emulatorHost ? DEFAULT_EMULATOR_PROJECT_ID : '');
   const identityToolkitBaseUrl = env['FIREBASE_AUTH_BASE_URL']?.trim() || undefined;
   const secureTokenBaseUrl = env['FIREBASE_TOKEN_BASE_URL']?.trim() || undefined;
 
@@ -51,12 +60,13 @@ export function resolveFirebaseAuthConfig(
     mode,
     apiKey,
     projectId,
+    allowFirebaseEmulators: allowFirebaseEmulators || undefined,
     emulatorHost,
     identityToolkitBaseUrl,
     secureTokenBaseUrl,
   };
 
-  validateFirebaseAuthEndpoints(config);
+  validateFirebaseAuthEndpoints(config, allowFirebaseEmulators);
   return Object.freeze(config);
 }
 
@@ -119,12 +129,18 @@ function validateProductionEndpoint(
 }
 
 /** Validates endpoint mode and routing before any credentials can be sent. */
-export function validateFirebaseAuthEndpoints(config: FirebaseAuthConfig): void {
+export function validateFirebaseAuthEndpoints(
+  config: FirebaseAuthConfig,
+  allowFirebaseEmulators: boolean = false,
+): void {
   if (config.mode !== 'development' && config.mode !== 'production') {
     throw new FirebaseConfigError('Firebase Auth mode must be explicitly development or production');
   }
   if (config.emulatorHost !== undefined) {
-    if (config.mode !== 'development') {
+    const emulatorAllowed = config.mode === 'development'
+      || allowFirebaseEmulators
+      || config.allowFirebaseEmulators === true;
+    if (!emulatorAllowed) {
       throw new FirebaseConfigError('Firebase Auth Emulator cannot be used in production mode');
     }
     if (config.identityToolkitBaseUrl !== undefined || config.secureTokenBaseUrl !== undefined) {
@@ -146,8 +162,11 @@ export function validateFirebaseAuthEndpoints(config: FirebaseAuthConfig): void 
 }
 
 /** Validates configuration before issuing requests. */
-export function validateFirebaseAuthConfig(config: FirebaseAuthConfig): void {
-  validateFirebaseAuthEndpoints(config);
+export function validateFirebaseAuthConfig(
+  config: FirebaseAuthConfig,
+  allowFirebaseEmulators: boolean = false,
+): void {
+  validateFirebaseAuthEndpoints(config, allowFirebaseEmulators);
   if (config.emulatorHost === undefined) {
     if (config.apiKey.trim().length === 0) {
       throw new FirebaseConfigError('FIREBASE_API_KEY is required when not using an emulator');

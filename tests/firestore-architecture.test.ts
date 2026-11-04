@@ -68,7 +68,7 @@ describe('stage 3 dependency policy', () => {
       }
     }
 
-    assert.deepEqual(Object.keys(appPackageJson.devDependencies).sort(), ['@types/node', 'electron', 'typescript']);
+    assert.deepEqual(Object.keys(appPackageJson.devDependencies).sort(), ['@types/node', 'electron', 'electron-builder', 'typescript']);
   });
 
   it('never imports a Firebase/Admin/Google Cloud client library in the main process', () => {
@@ -184,10 +184,15 @@ describe('stage 3 authorization boundary', () => {
     const mainSource = readProjectFile(join('electron', 'main.ts'));
 
     assert.ok(mainSource.includes('new FirestoreRestClient('), 'main.ts must own the Firestore REST client');
-    assert.ok(
-      mainSource.includes('getAccessToken: () => authService.getValidIdToken()'),
-      'the client must obtain its token from the authentication layer',
+    // Structural check: the client receives a getAccessToken provider whose body
+    // calls getValidIdToken() on a FirebaseAuthService instance. This avoids
+    // coupling the test to the exact cast/variable spelling used in main.ts.
+    assert.match(
+      mainSource,
+      /getAccessToken:\s*\(\)\s*=>\s*\(?\s*auth(?:\s+as\s+FirebaseAuthService)?\s*\)?\.getValidIdToken\(\)/,
+      'the client must obtain its token from the FirebaseAuthService inside main',
     );
+    assert.ok(mainSource.includes('FirebaseAuthService'), 'the token provider must be typed as FirebaseAuthService');
     assert.equal(mainSource.includes('loadURL('), false, 'no remote content may be loaded');
     assert.ok(
       mainSource.includes('Security Rules'),

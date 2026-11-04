@@ -1,0 +1,49 @@
+{
+  "appId": "com.drugmanager.qa",
+  "productName": "Drug Manager QA",
+  "directories": {
+    "output": "release-qa"
+  },
+  "files": [
+    "dist/electron/**/*",
+    "dist/renderer/**/*",
+    "!**/*.map",
+    "!**/*.test.js",
+    "!**/*.test.*",
+    "!tests/**",
+    "!node_modules/**/*",
+    "!.env",
+    "!.env.*",
+    "!**/.env*",
+    "!**/*.pem",
+    "!**/*.key",
+    "!**/*service-account*.json",
+    "!**/*serviceAccount*.json",
+    "!**/*.log",
+    "!**/*.tmp",
+    "!emulator-lab/**",
+    "!docs/**"
+  ],
+  "publish": [],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "signAndEditExecutable": false,
+    "forceCodeSigning": false
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Drug Manager QA",
+    "artifactName": "Drug Manager QA Setup ${version}.${ext}"
+  }
+}

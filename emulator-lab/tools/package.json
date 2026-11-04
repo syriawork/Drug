@@ -4,6 +4,6 @@
   "private": true,
   "description": "Isolated tooling for the Stage 3 emulator laboratory. This package is NEVER part of the drug-manager application dependency graph; it only provides the local Firebase emulators (Auth + Firestore) used for integration testing.",
   "devDependencies": {
-    "firebase-tools": "13.35.1"
+    "firebase-tools": "15.34.2"
   }
 }

@@ -1,4 +1,4 @@
-# مختبر المحاكي المعزول — Stage 3 (Firestore Rules Emulator Lab)
+# مختبر المحاكي المعزول — Stage 3 / Stage 34C (Auth, Firestore and Functions)
 
 هذا المجلد بيئة اختبار **معزولة تمامًا** للتحقق من أن تطبيق سطح المكتب يعمل عبر Firestore REST وبصلاحيات **قواعد أمان Firestore** الخاصة بمشروع الأندرويد.
 
@@ -9,7 +9,8 @@
 | لا تعديل على مشروع الأندرويد | `firestore.rules` هنا **نسخة** تُقارَن ببصمة SHA-256 مع الملف الأصلي قبل أي تشغيل؛ أي اختلاف يوقف التشغيل. |
 | لا تعديل على إعدادات الإنتاج | لا يوجد أي مشروع Firebase إنتاجي؛ المعرّف `demo-drug-manager-stage3` لا يمكن أن يُحلَّ إلا محليًا. |
 | لا تبعيات في تطبيق سطح المكتب | أدوات المحاكي مثبّتة في `tools/` بملف `package.json` مستقل، و`package.json` الخاص بالتطبيق يبقى بلا تبعيات وقت تشغيل. |
-| منافذ محلية فقط | Auth على `127.0.0.1:9099` و Firestore على `127.0.0.1:8080` و UI معطّل. |
+| منافذ محلية فقط | Auth على `127.0.0.1:9099` و Firestore على `127.0.0.1:8080` و Functions على `127.0.0.1:5001`؛ تبعيات Gen 2 الداخلية Eventarc على `127.0.0.1:9299` و Cloud Tasks على `127.0.0.1:9499` و UI معطّل. |
+| معرف مشروع تجريبي فقط | `LAB_PROJECT_ID` يجب أن يبدأ بـ `demo-`؛ الافتراضي `demo-drug-manager-stage3`. |
 
 ## المتطلبات
 
@@ -23,12 +24,13 @@
 # من جذر مشروع drug-manager
 npm run emulator:setup     # تثبيت firebase-tools داخل tools/ (مرة واحدة)
 npm run test:emulator      # بناء + تشغيل المحاكيات + اختبارات الأمان + إيقاف تلقائي
+npm --prefix functions run test:emulator # اختبارات callable authorization عبر المحاكيات الثلاثة وتبعيات Gen 2
 ```
 
 أو يدويًا:
 
 ```powershell
-npm run emulator:start     # تشغيل المحاكيات في المقدمة
+npm run emulator:start     # تشغيل Auth + Firestore + Functions في المقدمة؛ Ctrl+C في النافذة نفسها للإيقاف
 # في نافذة أخرى:
 $env:FIREBASE_AUTH_EMULATOR_HOST='127.0.0.1:9099'
 $env:FIRESTORE_EMULATOR_HOST='127.0.0.1:8080'
@@ -46,9 +48,10 @@ node --test dist/tests/firestore-rules-emulator.test.js
 
 | الملف | الدور |
 | --- | --- |
-| `firebase.json` | إعداد المحاكيات المعزول (auth + firestore) |
+| `firebase.json` | إعداد المحاكيات المعزول (auth + firestore + functions + تبعيات gen2 المحلية) |
 | `firestore.rules` | نسخة مطابقة لقواعد مشروع الأندرويد |
 | `tools/` | تثبيت معزول لـ `firebase-tools` (غير مشمول في Git) |
 | `scripts/lab-paths.mjs` | المسارات والمنافذ ومعرّف المشروع |
 | `scripts/start.mjs` | تشغيل المحاكيات يدويًا |
+| `scripts/run-functions-authorization-tests.mjs` | تشغيل اختبار callable عبر `emulators:exec`؛ الإيقاف تلقائي للمحاكيات التي بدأها |
 | `scripts/run-emulator-tests.mjs` | التحقق من بصمة القواعد ثم تشغيل الاختبار عبر `emulators:exec` |
