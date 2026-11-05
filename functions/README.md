@@ -119,6 +119,14 @@ application currently has no Functions-emulator endpoint; adding one would
 require a separately authorized stage and a build-time restriction. Production
 must never be pointed at this local Functions endpoint.
 
+## Stage 34D emulator contract and test coverage
+
+See [docs/stage34d-test-contract.md](./docs/stage34d-test-contract.md) for the
+concise Stage 34D test contract used by the local emulator suite. The document
+summarizes the confirmed implementation behavior, the temporary assumptions
+approved for this stage, and the original Stage 33L/33N requirements that remain
+unavailable in the repository.
+
 ## Deployment
 
 No Functions deployment configuration or deploy script is included at this

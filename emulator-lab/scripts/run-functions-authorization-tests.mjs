@@ -18,11 +18,12 @@ import {
 
 const functionsRoot = join(projectRoot, 'functions');
 const typeScriptCli = join(functionsRoot, 'node_modules', 'typescript', 'bin', 'tsc');
-const emulatorTest = join(functionsRoot, 'test', 'authorization-emulator.test.cjs');
+const authorizationTest = join(functionsRoot, 'test', 'authorization-emulator.test.cjs');
+const submitOrderTest = join(functionsRoot, 'test', 'submit-order-emulator.test.cjs');
 
 assertLabIsInstalled();
-if (!existsSync(typeScriptCli) || !existsSync(emulatorTest)) {
-  console.error('[stage34c] Functions dependencies or emulator test are missing.');
+if (!existsSync(typeScriptCli) || !existsSync(authorizationTest) || !existsSync(submitOrderTest)) {
+  console.error('[stage34c] Functions dependencies or emulator tests are missing.');
   console.error('[stage34c] Run npm ci from functions/ before the emulator test.');
   process.exit(1);
 }
@@ -35,7 +36,7 @@ if (build.status !== 0) {
   process.exit(build.status ?? 1);
 }
 
-const testCommand = `node --test "${emulatorTest}"`;
+const testCommand = `node --test "${authorizationTest}" "${submitOrderTest}"`;
 console.log(`[stage34c] project id          : ${LAB_PROJECT_ID}`);
 console.log(`[stage34c] auth emulator       : http://${AUTH_EMULATOR_HOST}`);
 console.log(`[stage34c] firestore emulator  : http://${FIRESTORE_EMULATOR_HOST}`);
