@@ -6,6 +6,10 @@ import { IPC_CHANNELS, listIpcChannelNames } from '../../electron/ipc/channels';
 import { createIpcHandlers } from '../../electron/ipc/handlers/application-handlers';
 import { FakeMedicinesRepository, FakeOrderRequestsRepository, makeMedicine } from '../stage7/helpers/fakes';
 import { buildApplication } from '../stage9/helpers';
+import {
+  createStage36a2IdentityFactory,
+  MemoryOrderRequestJournal,
+} from './order-request-journal-fake';
 
 type HandlerMap = Readonly<Record<string, (event: unknown, payload: unknown) => unknown>>;
 
@@ -14,9 +18,9 @@ async function invoke(handlers: HandlerMap, payload: unknown): Promise<Applicati
 }
 
 describe('Stage 16 submission IPC', () => {
-  it('adds exactly one named channel and one typed bridge operation', async () => {
+  it('exposes named submission and explicit recovery bridge operations', async () => {
     assert.equal(IPC_CHANNELS.orderRequestsSubmit, 'drug-manager:order-requests:submit');
-    assert.equal(listIpcChannelNames().filter((channel) => channel === IPC_CHANNELS.orderRequestsSubmit).length, 1);
+    assert.equal(listIpcChannelNames().filter((channel) => channel.startsWith('drug-manager:order-requests:')).length, 5);
 
     const used: { channel: string; args: readonly unknown[] }[] = [];
     const api = createDrugManagerApi(async (channel, ...args) => {
@@ -29,7 +33,13 @@ describe('Stage 16 submission IPC', () => {
       channel: IPC_CHANNELS.orderRequestsSubmit,
       args: [{ items: [{ medicineId: 'med-1', quantity: 1 }] }],
     }]);
-    assert.deepEqual(Object.keys(api.orderRequests).sort(), ['get', 'list', 'submit']);
+    assert.deepEqual(Object.keys(api.orderRequests).sort(), [
+      'get',
+      'list',
+      'listUnresolved',
+      'resume',
+      'submit',
+    ]);
     assert.equal('invoke' in api.orderRequests, false);
   });
 
@@ -39,12 +49,19 @@ describe('Stage 16 submission IPC', () => {
       undefined,
       new FakeMedicinesRepository([makeMedicine()]),
       requests,
+      undefined,
+      undefined,
+      new MemoryOrderRequestJournal(),
+      createStage36a2IdentityFactory(),
     );
     const handlers = createIpcHandlers({ application });
 
     const result = await invoke(handlers, { items: [{ medicineId: 'med-1', quantity: 2 }] });
 
-    assert.deepEqual(result, { ok: true, value: { requestId: 'req-generated-stage16' } });
+    assert.deepEqual(result, {
+      ok: true,
+      value: { operationId: 'stage36a2:operation-1', requestId: 'req-generated-stage16-1' },
+    });
     assert.equal(requests.submitted[0]?.uid, 'uid-admin');
   });
 
@@ -54,6 +71,10 @@ describe('Stage 16 submission IPC', () => {
       undefined,
       new FakeMedicinesRepository([makeMedicine()]),
       requests,
+      undefined,
+      undefined,
+      new MemoryOrderRequestJournal(),
+      createStage36a2IdentityFactory(),
     );
     const handlers = createIpcHandlers({ application });
     const hostile = [

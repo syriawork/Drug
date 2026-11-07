@@ -48,6 +48,110 @@ interface NavEntry {
   readonly implemented: boolean;
 }
 
+async function loadUnresolvedOrderRequests(): Promise<void> {
+  if (unresolvedRequestsInFlight) {
+    return;
+  }
+  const api = getDrugManagerApi();
+  if (api === null) {
+    renderUnresolvedOrderRequests(BRIDGE_UNAVAILABLE_MESSAGE);
+    return;
+  }
+  unresolvedRequestsInFlight = true;
+  renderUnresolvedOrderRequests('جارٍ قراءة الطلبات غير المحسومة…');
+  try {
+    const result = await api.orderRequests.listUnresolved();
+    if (!result.ok) {
+      renderUnresolvedOrderRequests(result.error.message);
+      return;
+    }
+    unresolvedOrderRequests = result.value;
+    renderUnresolvedOrderRequests(
+      unresolvedOrderRequests.length === 0
+        ? 'لا توجد طلبات محلية غير محسومة.'
+        : 'لم يُحسم بعض الإرسال السابق. استأنف الطلب الأصلي صراحةً؛ لن يُعاد إرساله تلقائيًا.',
+    );
+  } catch {
+    renderUnresolvedOrderRequests('تعذر قراءة الطلبات غير المحسومة. يُرجى إعادة المحاولة.');
+  } finally {
+    unresolvedRequestsInFlight = false;
+    setDisabled(ELEMENT_IDS.requestRecoveryRefresh, false);
+  }
+}
+
+function renderUnresolvedOrderRequests(message: string): void {
+  setHidden(ELEMENT_IDS.requestRecoveryPanel, false);
+  setText(ELEMENT_IDS.requestRecoveryMessage, message);
+  const rows = document.getElementById(ELEMENT_IDS.requestRecoveryItems);
+  if (rows === null) {
+    return;
+  }
+  rows.textContent = '';
+  for (const operation of unresolvedOrderRequests) {
+    const row = document.createElement('li');
+    const detail = document.createElement('span');
+    detail.textContent = `الطلب ${operation.requestId} — ${
+      operation.status === 'identity_conflict'
+        ? 'تعارض هوية؛ يلزم التحقق'
+        : operation.status === 'submission_unknown'
+          ? 'نتيجة الإرسال غير محسومة'
+          : 'لم يبدأ الإرسال'
+    }`;
+    row.append(detail);
+    if (operation.status !== 'identity_conflict') {
+      const resume = document.createElement('button');
+      resume.type = 'button';
+      resume.classList.toggle('button', true);
+      resume.classList.toggle('button-ghost', true);
+      resume.textContent = 'استئناف الطلب الأصلي';
+      resume.disabled = unresolvedRequestsInFlight || requestSubmissionInFlight;
+      resume.addEventListener('click', () => {
+        void resumeUnresolvedOrderRequest(operation);
+      });
+      row.append(resume);
+    }
+    rows.append(row);
+  }
+  setDisabled(ELEMENT_IDS.requestRecoveryRefresh, unresolvedRequestsInFlight);
+}
+
+async function resumeUnresolvedOrderRequest(operation: OrderRequestRecoveryView): Promise<void> {
+  if (requestSubmissionInFlight || unresolvedRequestsInFlight || operation.status === 'identity_conflict') {
+    return;
+  }
+  const api = getDrugManagerApi();
+  if (api === null) {
+    renderUnresolvedOrderRequests(BRIDGE_UNAVAILABLE_MESSAGE);
+    return;
+  }
+  requestSubmissionInFlight = true;
+  setRequestSubmitState('submitting', 'جارٍ استئناف الطلب الأصلي بالهوية المحفوظة…');
+  renderUnresolvedOrderRequests('جارٍ استئناف الطلب الأصلي…');
+  let refreshSubmittedStatus = false;
+  try {
+    const result = await api.orderRequests.resume({ operationId: operation.operationId });
+    if (!result.ok) {
+      renderUnresolvedOrderRequests(result.error.message);
+      return;
+    }
+    submittedRequestId = result.value.requestId;
+    setSubmittedRequestStatusState('idle', 'تم التحقق من الطلب الأصلي؛ اقرأ حالته المخزنة أدناه.');
+    setRequestSubmitState('success', `تم استئناف الطلب الأصلي ${result.value.requestId}.`);
+    unresolvedOrderRequests = unresolvedOrderRequests.filter(
+      (candidate) => candidate.operationId !== operation.operationId,
+    );
+    refreshSubmittedStatus = true;
+  } catch {
+    renderUnresolvedOrderRequests('تعذر استئناف الطلب الأصلي. سيظل محفوظًا للمحاولة لاحقًا.');
+  } finally {
+    requestSubmissionInFlight = false;
+    await loadUnresolvedOrderRequests();
+  }
+  if (refreshSubmittedStatus) {
+    await refreshSubmittedRequestStatus();
+  }
+}
+
 function invalidateOrderHistoryRequests(): void {
   ordersHistoryRequestGeneration += 1;
   ordersHistoryInFlight = false;
@@ -264,6 +368,8 @@ let requestItems: { readonly medicineId: string; readonly quantity: number }[] =
 let requestSubmissionInFlight = false;
 let requestStatusInFlight = false;
 let submittedRequestId: string | null = null;
+let unresolvedOrderRequests: readonly OrderRequestRecoveryView[] = [];
+let unresolvedRequestsInFlight = false;
 
 /**
  * The three `orders.status` values the domain defines.
@@ -503,6 +609,10 @@ medicineAddInbound: 'medicine-add-inbound',
   requestStatusRequestId: 'request-status-request-id',
   requestStatusMessage: 'request-status-message',
   requestStatusRefresh: 'request-status-refresh',
+  requestRecoveryPanel: 'request-recovery-panel',
+  requestRecoveryMessage: 'request-recovery-message',
+  requestRecoveryItems: 'request-recovery-items',
+  requestRecoveryRefresh: 'request-recovery-refresh',
   requestMedicineSelect: 'request-medicine-select',
   requestQuantity: 'request-quantity',
   requestAddItem: 'request-add-item',
@@ -752,6 +862,10 @@ function showLogin(message: string | null = null): void {
   requestMedicinesFailed = false;
   requestItems = [];
   requestSubmissionInFlight = false;
+  unresolvedOrderRequests = [];
+  unresolvedRequestsInFlight = false;
+  submittedRequestId = null;
+  renderUnresolvedOrderRequests('سجّل الدخول لعرض الطلبات غير المحسومة.');
   for (const id of [
     ELEMENT_IDS.requestMedicineSelect,
     ELEMENT_IDS.requestQuantity,
@@ -1047,6 +1161,7 @@ function selectView(view: string): void {
     if (target.view === 'request-submit') {
       if (requestMedicines === null) {
         void loadRequestMedicines();
+        void loadUnresolvedOrderRequests();
       } else {
         renderRequestItems();
         setRequestSubmitState('ready', '');
@@ -1493,6 +1608,9 @@ function attachHandlers(): void {
   // Stage 18: re-read only the request id returned by the successful submission.
   document.getElementById(ELEMENT_IDS.requestStatusRefresh)?.addEventListener('click', () => {
     void refreshSubmittedRequestStatus();
+  });
+  document.getElementById(ELEMENT_IDS.requestRecoveryRefresh)?.addEventListener('click', () => {
+    void loadUnresolvedOrderRequests();
   });
   document.getElementById(ELEMENT_IDS.medicineSave)?.addEventListener('click', () => {
     void submitMedicineUpdate();
@@ -2415,6 +2533,7 @@ async function submitOrderRequest(): Promise<void> {
     });
     if (!result.ok) {
       setRequestSubmitState('error', result.error.message);
+      await loadUnresolvedOrderRequests();
       return;
     }
     submittedRequestId = result.value.requestId;
@@ -2428,6 +2547,7 @@ async function submitOrderRequest(): Promise<void> {
     );
   } catch (error: unknown) {
     setRequestSubmitState('error', 'تعذر إرسال الطلب. يُرجى المحاولة مرة أخرى.');
+    await loadUnresolvedOrderRequests();
   } finally {
     requestSubmissionInFlight = false;
     const region = document.getElementById(ELEMENT_IDS.requestSubmitState);

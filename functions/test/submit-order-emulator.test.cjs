@@ -242,6 +242,29 @@ async function callSubmitOrder(user, payload, authenticated = true) {
   return { response, body };
 }
 
+async function callSetTestClock(user, isoTime) {
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${user.idToken}` };
+  const response = await requestJson(await callableUrl('setTestClock'), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ data: { isoTime } }),
+  });
+  let body;
+  try { body = await response.json(); } catch { body = { rawText: await response.text() }; }
+  return { response, body };
+}
+
+async function callClearTestClock(user) {
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${user.idToken}` };
+  const response = await requestJson(await callableUrl('clearTestClock'), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ data: {} }),
+  });
+  let body;
+  try { body = await response.json(); } catch { body = { rawText: await response.text() }; }
+  return { response, body };
+}
 async function assertCallableFailure(user, payload, code, options = {}) {
   const { response, body } = await callSubmitOrder(user, payload, options.authenticated !== false);
   assert.notEqual(response.status, 200, `expected ${code} but the callable succeeded`);
@@ -513,28 +536,35 @@ describe('Stage 34D submitOrder emulator integration', () => {
   });
 
   it('enforces Friday restriction when the current Damascus day is Friday', async () => {
-    const parts = getDamascusNowParts();
-    if (parts.dayOfWeek !== 5) {
-      return;
-    }
     const user = await createAuthUser('friday-restricted');
     await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
     await writeSettings({ allowFridayOrders: false, startTime: '06:00', endTime: '10:00', minDaysBetweenOrders: 0 });
     await writeMedicine('friday-medicine', { name: 'Friday', maxQuantity: 10, stock: 10, reservedStock: 0, totalInward: 10, totalOutward: 0 });
-    await assertCallableFailure(user, { idempotencyKey: 'friday-key', items: [{ medicineId: 'friday-medicine', quantity: 1 }] }, 'FAILED_PRECONDITION');
+    await callSetTestClock(user, '2026-07-03T08:00:00+03:00');
+    try {
+      await assertCallableFailure(user, { idempotencyKey: 'friday-key-fri', items: [{ medicineId: 'friday-medicine', quantity: 1 }] }, 'FAILED_PRECONDITION');
+      await callSetTestClock(user, '2026-07-06T08:00:00+03:00');
+      const result = await expectSuccessResult(user, { idempotencyKey: 'friday-key-mon', items: [{ medicineId: 'friday-medicine', quantity: 1 }] });
+      assert.equal(typeof result.orderId, 'string');
+    } finally {
+      await callClearTestClock(user);
+    }
   });
 
   it('enforces the submission time window when the current Damascus time is outside the window', async () => {
-    const parts = getDamascusNowParts();
-    const nowMinutes = parts.hour * 60 + parts.minute;
-    if (nowMinutes >= 6 * 60 && nowMinutes <= 10 * 60) {
-      return;
-    }
     const user = await createAuthUser('time-window');
     await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
     await writeSettings({ allowFridayOrders: true, startTime: '06:00', endTime: '10:00', minDaysBetweenOrders: 0 });
     await writeMedicine('time-window-med', { name: 'Window', maxQuantity: 10, stock: 10, reservedStock: 0, totalInward: 10, totalOutward: 0 });
-    await assertCallableFailure(user, { idempotencyKey: 'time-window-key', items: [{ medicineId: 'time-window-med', quantity: 1 }] }, 'FAILED_PRECONDITION');
+    await callSetTestClock(user, '2026-07-06T08:00:00+03:00');
+    try {
+      const result = await expectSuccessResult(user, { idempotencyKey: 'time-window-key-in', items: [{ medicineId: 'time-window-med', quantity: 1 }] });
+      assert.equal(typeof result.orderId, 'string');
+      await callSetTestClock(user, '2026-07-06T12:00:00+03:00');
+      await assertCallableFailure(user, { idempotencyKey: 'time-window-key-out', items: [{ medicineId: 'time-window-med', quantity: 1 }] }, 'FAILED_PRECONDITION');
+    } finally {
+      await callClearTestClock(user);
+    }
   });
 
   it('rejects a user who has ordered too recently', async () => {
@@ -571,16 +601,19 @@ describe('Stage 34D submitOrder emulator integration', () => {
   });
 
   it('falls back to safe defaults with malformed settings data', async () => {
-    const nowMinutes = getDamascusNowParts().hour * 60 + getDamascusNowParts().minute;
-    if (nowMinutes < 6 * 60 || nowMinutes > 10 * 60) {
-      return;
-    }
     const user = await createAuthUser('malformed-settings');
     await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
     await writeSettings({ allowFridayOrders: 'yes', startTime: 42, endTime: null, minDaysBetweenOrders: 'bad' });
     await writeMedicine('m-1', { name: 'Alpha', maxQuantity: 10, stock: 20, reservedStock: 0, totalInward: 20, totalOutward: 0 });
-    const result = await expectSuccessResult(user, { idempotencyKey: 'malformed-settings-key', items: [{ medicineId: 'm-1', quantity: 1 }] });
-    assert.equal(typeof result.orderId, 'string');
+    await callSetTestClock(user, '2026-07-06T08:00:00+03:00');
+    try {
+      const result = await expectSuccessResult(user, { idempotencyKey: 'malformed-settings-key-in', items: [{ medicineId: 'm-1', quantity: 1 }] });
+      assert.equal(typeof result.orderId, 'string');
+      await callSetTestClock(user, '2026-07-06T12:00:00+03:00');
+      await assertCallableFailure(user, { idempotencyKey: 'malformed-settings-key-out', items: [{ medicineId: 'm-1', quantity: 1 }] }, 'FAILED_PRECONDITION');
+    } finally {
+      await callClearTestClock(user);
+    }
   });
 
   it('writes the expected order document fields for a successful order', async () => {
@@ -657,3 +690,137 @@ describe('Stage 34D submitOrder emulator integration', () => {
     assert.equal(subDoc.payloadHash, stableHash(JSON.stringify([{ medicineId: 'm-1', quantity: 1 }] )));
   });
 });
+
+describe('setTestClock timestamp validation', () => {
+  async function expectSetTestClockOk(user, isoTime) {
+    const { response, body } = await callSetTestClock(user, isoTime);
+    assert.equal(response.status, 200, `expected ok for ${isoTime} but got ${response.status}: ${JSON.stringify(body)}`);
+    assert.equal(body.result.ok, true);
+    await callClearTestClock(user);
+  }
+
+  async function expectSetTestClockInvalidArgument(user, isoTime, label) {
+    const { response, body } = await callSetTestClock(user, isoTime);
+    assert.notEqual(response.status, 200, `expected invalid-argument for ${label} (${JSON.stringify(isoTime)}) but callable succeeded`);
+    assert.equal(body.error?.status ?? body.error?.code, 'INVALID_ARGUMENT', `expected invalid-argument for ${label} (${JSON.stringify(isoTime)}) but body was ${JSON.stringify(body)}`);
+    assert.equal(typeof body.error?.message, 'string');
+  }
+
+  it('accepts a valid ISO timestamp with +03:00 offset', async () => {
+    const user = await createAuthUser('clock-valid-offset');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockOk(user, '2026-07-03T08:00:00+03:00');
+  });
+
+  it('accepts a valid ISO timestamp with Z suffix', async () => {
+    const user = await createAuthUser('clock-valid-z');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockOk(user, '2026-07-03T05:00:00Z');
+  });
+
+  it('accepts a valid leap-day timestamp', async () => {
+    const user = await createAuthUser('clock-leap-day');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockOk(user, '2024-02-29T08:00:00+03:00');
+  });
+
+  it('accepts a timestamp with fractional seconds', async () => {
+    const user = await createAuthUser('clock-fraction');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockOk(user, '2026-07-03T08:00:00.123+03:00');
+  });
+  it('rejects a date-only string', async () => {
+    const user = await createAuthUser('clock-date-only');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockInvalidArgument(user, '2026-07-03', 'date-only');
+  });
+
+  it('rejects a timestamp without a timezone', async () => {
+    const user = await createAuthUser('clock-no-tz');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockInvalidArgument(user, '2026-07-03T08:00:00', 'no timezone');
+  });
+
+  it('rejects a natural-language date', async () => {
+    const user = await createAuthUser('clock-natural');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockInvalidArgument(user, 'July 3, 2026', 'natural language');
+  });
+
+  it('rejects an ambiguous slash-separated date', async () => {
+    const user = await createAuthUser('clock-slash');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockInvalidArgument(user, '07/03/2026', 'slash date');
+  });
+
+  it('rejects February 30', async () => {
+    const user = await createAuthUser('clock-feb30');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockInvalidArgument(user, '2026-02-30T08:00:00+03:00', 'Feb 30');
+  });
+
+  it('rejects February 29 in a non-leap year', async () => {
+    const user = await createAuthUser('clock-feb29-nonleap');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockInvalidArgument(user, '2026-02-29T08:00:00+03:00', 'Feb 29 non-leap');
+  });
+
+  it('rejects month 13', async () => {
+    const user = await createAuthUser('clock-month13');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockInvalidArgument(user, '2026-13-01T08:00:00+03:00', 'month 13');
+  });
+
+  it('rejects hour 24', async () => {
+    const user = await createAuthUser('clock-hour24');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockInvalidArgument(user, '2026-07-03T24:00:00+03:00', 'hour 24');
+  });
+
+  it('rejects minute 60', async () => {
+    const user = await createAuthUser('clock-min60');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockInvalidArgument(user, '2026-07-03T08:60:00+03:00', 'minute 60');
+  });
+
+  it('rejects second 60', async () => {
+    const user = await createAuthUser('clock-sec60');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockInvalidArgument(user, '2026-07-03T08:00:60+03:00', 'second 60');
+  });
+
+  it('rejects timezone offset +14:01', async () => {
+    const user = await createAuthUser('clock-tz1401');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockInvalidArgument(user, '2026-07-03T08:00:00+14:01', 'offset +14:01');
+  });
+
+  it('rejects timezone offset without minutes', async () => {
+    const user = await createAuthUser('clock-tz03');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockInvalidArgument(user, '2026-07-03T08:00:00+03', 'offset +03');
+  });
+
+  it('rejects an empty string', async () => {
+    const user = await createAuthUser('clock-empty');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    await expectSetTestClockInvalidArgument(user, '', 'empty string');
+  });
+
+  it('rejects a non-string isoTime value', async () => {
+    const user = await createAuthUser('clock-nonstring');
+    await writeProfile(user, { uid: user.uid, role: 'employee', status: 'approved', hasException: false });
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${user.idToken}` };
+    const response = await requestJson(await callableUrl('setTestClock'), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ data: { isoTime: 12345 } }),
+    });
+    assert.notEqual(response.status, 200, 'expected invalid-argument for non-string isoTime but callable succeeded');
+    let body;
+    try { body = await response.json(); } catch { body = { rawText: await response.text() }; }
+    assert.equal(body.error?.status ?? body.error?.code, 'INVALID_ARGUMENT', `expected invalid-argument but body was ${JSON.stringify(body)}`);
+  });
+
+});
+

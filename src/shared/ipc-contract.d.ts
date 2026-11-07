@@ -30,6 +30,10 @@ interface AppStatusPayload {
   readonly startedAtIso: string;
 }
 
+interface ResumeOrderRequestInput {
+  readonly operationId: string;
+}
+
 /** Safe authentication state delivered to the renderer. Sensitive tokens are NEVER exposed. */
 interface SafeAuthState {
   readonly authenticated: boolean;
@@ -321,6 +325,8 @@ interface DrugManagerApi {
     get(input: GetOrderRequestInput): Promise<ApplicationResult<OrderRequestListItemView>>;
     /** Stage 16: creates a pending request from medicine ids and quantities only. */
     submit(input: SubmitOrderRequestInput): Promise<ApplicationResult<OrderRequestSubmissionView>>;
+    listUnresolved(): Promise<ApplicationResult<readonly OrderRequestRecoveryView[]>>;
+    resume(input: ResumeOrderRequestInput): Promise<ApplicationResult<OrderRequestSubmissionView>>;
   };
   settings: {
     get(): Promise<ApplicationResult<AppSettingsView>>;

@@ -7,6 +7,7 @@
  */
 
 import { createManagerApplication } from '../../electron/application';
+import type { OrderRequestIdentityFactory, OrderRequestJournal } from '../../electron/application';
 import {
   FakeMedicinesRepository,
   FakeOrderProcessingService,
@@ -37,6 +38,8 @@ export function buildApplication(
   orderRequests?: FakeOrderRequestsRepository,
   orders?: FakeOrdersRepository,
   session?: FakeSession,
+  operationJournal?: OrderRequestJournal,
+  createOrderRequestIdentity?: OrderRequestIdentityFactory,
 ): ReturnType<typeof createManagerApplication> {
   return createManagerApplication({
     session: session ?? FakeSession.signedIn(),
@@ -44,6 +47,8 @@ export function buildApplication(
     medicinesRepository: medicines ?? new FakeMedicinesRepository([]),
     settingsRepository: new FakeSettingsRepository(null),
     orderRequestsRepository: orderRequests ?? new FakeOrderRequestsRepository([]),
+    operationJournal,
+    createOrderRequestIdentity,
     ordersRepository: orders ?? new FakeOrdersRepository([]),
     // Stage 14: always supplied, like orders - the composition root requires it,
     // so a default would hide a caller that forgot to wire it.

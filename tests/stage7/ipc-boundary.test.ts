@@ -234,6 +234,8 @@ describe('Stage 7 requirement 8: the renderer cannot invoke an arbitrary channel
     await api.orderRequests.list();
     await api.orderRequests.get({ requestId: 'req-1' });
     await api.orderRequests.submit({ items: [{ medicineId: 'med-1', quantity: 1 }] });
+    await api.orderRequests.listUnresolved();
+    await api.orderRequests.resume({ operationId: 'operation-1' });
     await api.settings.get();
     // Stage 12: the read-only history read takes NO argument, which is asserted
     // below by the absence of any second entry for this call.
@@ -290,7 +292,7 @@ describe('Stage 7 requirement 8: the renderer cannot invoke an arbitrary channel
     // named inbound receipt; Stage 16 adds employee submission; Stage 17 adds
     // one payload-free personal history read; Stage 19 adds the selected-order
     // movement read.
-    assert.equal(invokeCalls.length, 19, 'the preload must have exactly nineteen invoke call sites');
+    assert.equal(invokeCalls.length, 21, 'the preload must have exactly twenty-one invoke call sites');
     for (const argument of invokeCalls) {
       assert.match(argument ?? '', /^[A-Z][A-Z0-9_]*$/, `channel must be a constant, found: ${String(argument)}`);
     }
@@ -343,6 +345,8 @@ describe('Stage 7 requirement 8: the renderer cannot invoke an arbitrary channel
       IPC_CHANNELS.orderRequestsGet,
       IPC_CHANNELS.orderRequestsSubmit,
       IPC_CHANNELS.orderRequestsList,
+      IPC_CHANNELS.orderRequestsListUnresolved,
+      IPC_CHANNELS.orderRequestsResume,
       // Stage 12 adds the read-only `orders.list`. It is asserted here so the
       // handler set can never silently lose the history read again.
       IPC_CHANNELS.ordersList,
@@ -496,6 +500,8 @@ describe('Stage 7 requirement 2: the renderer-facing API exposes no raw Firestor
       'api.medicines.updateMaxQuantity',
       'api.orderRequests.get',
       'api.orderRequests.list',
+      'api.orderRequests.listUnresolved',
+      'api.orderRequests.resume',
       'api.orderRequests.submit',
       'api.orders.list',
       'api.orders.loadMore',

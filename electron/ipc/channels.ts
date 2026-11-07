@@ -22,6 +22,8 @@ export const IPC_CHANNELS = {
   // Stage 16: submit employee intent only; the Main process supplies identity,
   // catalogue snapshots and repository-owned request metadata.
   orderRequestsSubmit: 'drug-manager:order-requests:submit',
+  orderRequestsListUnresolved: 'drug-manager:order-requests:list-unresolved',
+  orderRequestsResume: 'drug-manager:order-requests:resume',
   settingsGet: 'drug-manager:settings:get',
   ordersProcess: 'drug-manager:orders:process',
   // Stage 12: the READ-ONLY history/audit read.

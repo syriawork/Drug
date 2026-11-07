@@ -82,3 +82,16 @@ export class InvalidInputError extends DomainError {
     this.name = 'InvalidInputError';
   }
 }
+
+export class OrderRequestSubmissionError extends DomainError {
+  public readonly resolution: 'definitive_rejection' | 'unknown';
+
+  public constructor(
+    error: DomainError,
+    resolution: 'definitive_rejection' | 'unknown',
+  ) {
+    super(error.kind, error.message, { documentPath: error.documentPath, cause: error.cause });
+    this.name = 'OrderRequestSubmissionError';
+    this.resolution = resolution;
+  }
+}

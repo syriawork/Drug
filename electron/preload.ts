@@ -30,7 +30,7 @@ import { contextBridge, ipcRenderer } from 'electron';
  * the copies cannot drift apart.
  */
 
-const DRUG_MANAGER_API_VERSION = '0.3.0';
+const DRUG_MANAGER_API_VERSION = '0.4.0';
 const APP_STATUS_CHANNEL = 'drug-manager:app-status';
 const AUTH_SIGN_IN_CHANNEL = 'drug-manager:auth:sign-in';
 const AUTH_SIGN_OUT_CHANNEL = 'drug-manager:auth:sign-out';
@@ -42,6 +42,8 @@ const MEDICINES_UPDATE_MAX_QUANTITY_CHANNEL = 'drug-manager:medicines:update-max
 const ORDER_REQUESTS_LIST_CHANNEL = 'drug-manager:order-requests:list';
 const ORDER_REQUESTS_GET_CHANNEL = 'drug-manager:order-requests:get';
 const ORDER_REQUESTS_SUBMIT_CHANNEL = 'drug-manager:order-requests:submit';
+const ORDER_REQUESTS_LIST_UNRESOLVED_CHANNEL = 'drug-manager:order-requests:list-unresolved';
+const ORDER_REQUESTS_RESUME_CHANNEL = 'drug-manager:order-requests:resume';
 const SETTINGS_GET_CHANNEL = 'drug-manager:settings:get';
 const ORDERS_PROCESS_CHANNEL = 'drug-manager:orders:process';
 const ORDERS_LIST_CHANNEL = 'drug-manager:orders:list';
@@ -117,6 +119,14 @@ const drugManagerApi: DrugManagerApi = deepFreeze({
     // Stage 16: the renderer supplies only medicine ids and quantities.
     submit: async (input: SubmitOrderRequestInput): Promise<ApplicationResult<OrderRequestSubmissionView>> => {
       const response = await ipcRenderer.invoke(ORDER_REQUESTS_SUBMIT_CHANNEL, input);
+      return response as ApplicationResult<OrderRequestSubmissionView>;
+    },
+    listUnresolved: async (): Promise<ApplicationResult<readonly OrderRequestRecoveryView[]>> => {
+      const response = await ipcRenderer.invoke(ORDER_REQUESTS_LIST_UNRESOLVED_CHANNEL);
+      return response as ApplicationResult<readonly OrderRequestRecoveryView[]>;
+    },
+    resume: async (input: ResumeOrderRequestInput): Promise<ApplicationResult<OrderRequestSubmissionView>> => {
+      const response = await ipcRenderer.invoke(ORDER_REQUESTS_RESUME_CHANNEL, input);
       return response as ApplicationResult<OrderRequestSubmissionView>;
     },
   },

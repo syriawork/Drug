@@ -42,7 +42,11 @@ import { AuthApplicationService, type AuthenticationSession } from './auth.servi
 import { InboundStockService } from './inbound-stock.service';
 import { MedicinesManagementService } from './medicines-management.service';
 import { ManagerApplicationService, type ManagerRepositories } from './manager-data.service';
-import { OrderRequestsApplicationService } from './order-requests.service';
+import {
+  OrderRequestsApplicationService,
+  type OrderRequestIdentityFactory,
+  type OrderRequestJournal,
+} from './order-requests.service';
 import { UsersManagementService } from './users-management.service';
 
 export {
@@ -71,7 +75,11 @@ export { MANAGER_LIST_LIMITS, ManagerApplicationService } from './manager-data.s
 export type { AuthStateSource, ManagerApplicationServiceOptions, ManagerRepositories } from './manager-data.service';
 
 export { OrderRequestsApplicationService } from './order-requests.service';
-export type { OrderRequestsApplicationServiceOptions } from './order-requests.service';
+export type {
+  OrderRequestsApplicationServiceOptions,
+  OrderRequestIdentityFactory,
+  OrderRequestJournal,
+} from './order-requests.service';
 
 export { UsersManagementService } from './users-management.service';
 export type { UsersManagementServiceOptions } from './users-management.service';
@@ -122,6 +130,8 @@ export interface ManagerApplicationDependencies {
   readonly medicinesRepository: MedicinesRepository;
   readonly settingsRepository: SettingsRepository;
   readonly orderRequestsRepository: OrderRequestsRepository;
+  readonly operationJournal?: OrderRequestJournal | undefined;
+  readonly createOrderRequestIdentity?: OrderRequestIdentityFactory | undefined;
   /**
    * Stage 12: the READ-ONLY orders repository behind the history/audit screen.
    *
@@ -199,6 +209,8 @@ export function createManagerApplication(dependencies: ManagerApplicationDepende
       // Stage 16 resolves item names from the same trusted catalogue as the rest
       // of the application before the existing submission repository is called.
       medicines: dependencies.medicinesRepository,
+      operationJournal: dependencies.operationJournal,
+      createSubmissionIdentity: dependencies.createOrderRequestIdentity,
       // Stage 11: the same read contract Stage 6 uses, so a detail re-read can
       // never observe a different document than the processing transaction did.
       orderRequests: dependencies.orderRequestsRepository,

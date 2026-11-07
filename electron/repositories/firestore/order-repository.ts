@@ -16,7 +16,9 @@
  */
 
 import type { Order, OrderItem, OrderRequest, OrderRequestStatus, StockLog } from '../../domain/models';
-import { generateAutoId } from '../../services/firestore-rest';
+import { DomainError, OrderRequestSubmissionError } from '../../domain/errors';
+import { FirestoreTimestamp } from '../../services/firestore-codec';
+import { FirestoreRestError } from '../../services/firestore-rest';
 import type {
   OrderRequestsRepository,
   OrdersRepository,
@@ -33,11 +35,22 @@ import {
   requirePositiveLimit,
   toDomainError,
 } from './repository-support';
-import { DomainError } from '../../domain/errors';
 
 const ORDER_REQUESTS = 'order_requests';
 const ORDERS = 'orders';
 const STOCK_LOGS = 'stock_logs';
+const ORDER_REQUEST_STATUS_VALUES = new Set(['pending', 'processed', 'failed']);
+const ORDER_REQUEST_DOCUMENT_FIELDS = new Set([
+  'uid',
+  'items',
+  'status',
+  'requestDate',
+  'orderId',
+  'error',
+  'processedBy',
+  'processedAt',
+]);
+const ORDER_REQUEST_ITEM_FIELDS = new Set(['medicineId', 'medicineName', 'quantity']);
 
 export class FirestoreOrderRequestsRepository implements OrderRequestsRepository {
   private readonly context: RepositoryContext;
@@ -103,13 +116,12 @@ export class FirestoreOrderRequestsRepository implements OrderRequestsRepository
   }
 
   public async submitPendingRequest(input: {
+    readonly requestId: string;
     readonly uid: string;
     readonly items: readonly OrderItem[];
-  }): Promise<string> {
+  }): Promise<'created' | 'reconciled' | 'identity-conflict'> {
+    const requestId = requireId(input.requestId, 'requestId');
     const safeUid = requireId(input.uid, 'uid');
-    // The id is generated client-side: a document id must be known before the
-    // commit, and the 20-character format matches Firestore's own Auto-ID.
-    const requestId = generateAutoId();
     const path = documentPath(ORDER_REQUESTS, requestId);
 
     // `mapNewOrderRequest` fixes status='pending' and requestDate=SERVER_TIMESTAMP.
@@ -117,11 +129,153 @@ export class FirestoreOrderRequestsRepository implements OrderRequestsRepository
 
     try {
       await this.context.client.commitWrites([{ relativePath: path, data, kind }]);
-      return requestId;
+      return 'created';
     } catch (error: unknown) {
-      throw toDomainError(error, path);
+      if (error instanceof FirestoreRestError && error.reason === 'ALREADY_EXISTS') {
+        let document;
+        try {
+          document = await this.context.client.getDocumentOrNull(path);
+        } catch (readError: unknown) {
+          throw toDomainError(readError, path);
+        }
+        if (document === null) {
+          throw new DomainError(
+            'UNKNOWN',
+            'The existing order request could not be read after a create conflict.',
+            { documentPath: path, cause: error },
+          );
+        }
+        const existing = validateExistingOrderRequestDocument(document, path);
+        if (
+          existing.uid !== safeUid
+          || !sameOrderRequestItems(existing.items, input.items)
+        ) {
+          return 'identity-conflict';
+        }
+        return 'reconciled';
+      }
+
+      const domainError = toDomainError(error, path);
+      if (
+        error instanceof FirestoreRestError
+        && (
+          error.reason === 'PERMISSION_DENIED'
+          || error.reason === 'UNAUTHENTICATED'
+          || error.reason === 'FAILED_PRECONDITION'
+          || error.reason === 'INVALID_ARGUMENT'
+        )
+      ) {
+        throw new OrderRequestSubmissionError(domainError, 'definitive_rejection');
+      }
+      throw new OrderRequestSubmissionError(domainError, 'unknown');
     }
   }
+}
+
+interface ValidatedExistingOrderRequest {
+  readonly uid: string;
+  readonly items: readonly { readonly medicineId: string; readonly quantity: number }[];
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function sameOrderRequestItems(
+  left: readonly { readonly medicineId: string; readonly quantity: number }[],
+  right: readonly { readonly medicineId: string; readonly quantity: number }[],
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  const counts = new Map<string, Map<number, number>>();
+  for (const item of left) {
+    let quantities = counts.get(item.medicineId);
+    if (quantities === undefined) {
+      quantities = new Map<number, number>();
+      counts.set(item.medicineId, quantities);
+    }
+    quantities.set(item.quantity, (quantities.get(item.quantity) ?? 0) + 1);
+  }
+  for (const item of right) {
+    const quantities = counts.get(item.medicineId);
+    const remaining = quantities?.get(item.quantity) ?? 0;
+    if (remaining === 0) {
+      return false;
+    }
+    if (remaining === 1) {
+      quantities?.delete(item.quantity);
+      if (quantities?.size === 0) {
+        counts.delete(item.medicineId);
+      }
+    } else {
+      quantities?.set(item.quantity, remaining - 1);
+    }
+  }
+  return counts.size === 0;
+}
+
+function validateExistingOrderRequestDocument(
+  document: Awaited<ReturnType<RepositoryContext['client']['getDocumentOrNull']>> & {},
+  expectedPath: string,
+): ValidatedExistingOrderRequest {
+  const invalid = (message: string): never => {
+    throw new DomainError('MALFORMED_DATA', message, { documentPath: expectedPath });
+  };
+  if (document.relativePath !== expectedPath) {
+    return invalid('The existing order request resolved to an unexpected document path.');
+  }
+  const data = document.data;
+  if (
+    !isPlainRecord(data)
+    || Object.keys(data).some((key) => !ORDER_REQUEST_DOCUMENT_FIELDS.has(key))
+    || typeof data['uid'] !== 'string'
+    || data['uid'].length === 0
+    || !ORDER_REQUEST_STATUS_VALUES.has(String(data['status']))
+    || !(data['requestDate'] instanceof FirestoreTimestamp)
+    || !Number.isFinite(data['requestDate'].toDate().getTime())
+    || !Array.isArray(data['items'])
+    || data['items'].length === 0
+    || data['items'].length > 5
+  ) {
+    return invalid('The existing order request does not match the strict document schema.');
+  }
+  for (const optionalField of ['orderId', 'error', 'processedBy'] as const) {
+    const value = data[optionalField];
+    if (value !== undefined && value !== null && typeof value !== 'string') {
+      return invalid(`The existing order request has a malformed ${optionalField} field.`);
+    }
+  }
+  if (
+    data['processedAt'] !== undefined
+    && data['processedAt'] !== null
+    && !(data['processedAt'] instanceof FirestoreTimestamp)
+  ) {
+    return invalid('The existing order request has a malformed processedAt field.');
+  }
+  const items: { medicineId: string; quantity: number }[] = [];
+  for (const value of data['items']) {
+    if (
+      !isPlainRecord(value)
+      || Object.keys(value).some((key) => !ORDER_REQUEST_ITEM_FIELDS.has(key))
+      || Object.keys(value).length !== ORDER_REQUEST_ITEM_FIELDS.size
+      || typeof value['medicineId'] !== 'string'
+      || !/^[A-Za-z0-9_-]{1,128}$/.test(value['medicineId'])
+      || typeof value['medicineName'] !== 'string'
+      || value['medicineName'].trim().length === 0
+      || typeof value['quantity'] !== 'number'
+      || !Number.isSafeInteger(value['quantity'])
+      || value['quantity'] <= 0
+    ) {
+      return invalid('The existing order request contains a malformed item.');
+    }
+    items.push({ medicineId: value['medicineId'], quantity: value['quantity'] });
+  }
+  return Object.freeze({ uid: data['uid'], items: Object.freeze(items) });
 }
 
 export class FirestoreOrdersRepository implements OrdersRepository {

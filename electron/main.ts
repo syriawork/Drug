@@ -1,5 +1,8 @@
 import { app, BrowserWindow, ipcMain, session } from 'electron';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
+import { createOperationIdentity } from '../functions/src/domain/operations';
+import { OperationJournal } from './journal/operation-journal';
 import { createManagerApplication } from './application';
 import { APP_DEFAULTS, createAppConfig } from './config/app-config';
 import { createFirebaseClients } from './config/firebase-bootstrap';
@@ -20,7 +23,7 @@ import {
 } from './repositories';
 import { createAppStatusProvider } from './services/app-status';
 import { FirebaseAuthService } from './services/firebase-auth';
-import { FirestoreRestClient } from './services/firestore-rest';
+import { FirestoreRestClient, generateAutoId } from './services/firestore-rest';
 import { FirestoreOrderProcessingService } from './services/order-processing.service';
 import { containsArabicCharacters, toCodePoints } from './util/text';
 import { assertSecureWebPreferences, createSecureWebPreferences, createWindowOptions } from './window/security';
@@ -62,6 +65,42 @@ import { assertSecureWebPreferences, createSecureWebPreferences, createWindowOpt
 
 const SELF_TEST_FLAG = '--self-test';
 const SELF_TEST_TIMEOUT_MS = 15000;
+
+/** Stage 36A2A - single-instance ownership, acquired before any other work. */
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+  process.exit(0);
+}
+
+/** The single main window, accessible by the `second-instance` handler. */
+let mainWindow: BrowserWindow | null = null;
+let secondInstanceNeedsFocus = false;
+
+/** Focuses and restores the existing window when a second instance launches. */
+function focusMainWindow(): void {
+  const window = mainWindow;
+  if (!window || window.isDestroyed()) {
+    secondInstanceNeedsFocus = true;
+    return;
+  }
+  secondInstanceNeedsFocus = false;
+  if (window.isMinimized()) {
+    window.restore();
+  }
+  if (!window.isVisible()) {
+    window.show();
+  }
+  window.focus();
+}
+
+app.on('second-instance', () => {
+  focusMainWindow();
+});
+
+const operationJournal = new OperationJournal(
+  join(app.getPath('userData'), 'operation-journal'),
+);
 
 const isDevelopment = !app.isPackaged;
 const isSelfTestRun = process.argv.includes(SELF_TEST_FLAG);
@@ -110,6 +149,19 @@ const application = createManagerApplication({
   medicinesRepository: new FirestoreMedicinesRepository(repositoryContext),
   settingsRepository: new FirestoreSettingsRepository(repositoryContext),
   orderRequestsRepository: new FirestoreOrderRequestsRepository(repositoryContext),
+  operationJournal,
+  createOrderRequestIdentity: (uid, items) => {
+    const operationId = randomUUID();
+    const requestId = generateAutoId();
+    return {
+      operation: createOperationIdentity(operationId, 'reserve', {
+        orderId: requestId,
+        userId: uid,
+        items,
+      }),
+      requestId,
+    };
+  },
   // Stage 12: READ-ONLY. The orders history/audit screen reads through this; the
   // repository exposes no create/update/delete, so nothing here can write an order.
   // Orders are created only by the Stage 6 transaction below.
@@ -222,19 +274,22 @@ function createMainWindow(): BrowserWindow {
   const webPreferences = createSecureWebPreferences({ preloadPath, isDevelopment });
   assertSecureWebPreferences(webPreferences);
 
-  const mainWindow = new BrowserWindow(createWindowOptions(config, webPreferences));
+  const window = new BrowserWindow(createWindowOptions(config, webPreferences));
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+  window.once('ready-to-show', () => {
+    window.show();
     log('window shown');
   });
-  mainWindow.on('closed', () => {
+  window.on('closed', () => {
+    if (mainWindow === window) {
+      mainWindow = null;
+    }
     log('window closed');
   });
 
-  void mainWindow.loadFile(config.indexPath);
+  void window.loadFile(config.indexPath);
   log(`loading local UI: ${config.indexPath}`);
-  return mainWindow;
+  return window;
 }
 
 /**
@@ -390,7 +445,9 @@ app.on('window-all-closed', () => {
   app.quit();
 });
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
+  await operationJournal.initialize();
+
   log(`starting ${config.appName} ${app.getVersion()} (electron ${process.versions.electron ?? 'unknown'}, dev=${String(isDevelopment)})`);
 
   const observedExternalRequests: string[] = [];
@@ -402,7 +459,10 @@ void app.whenReady().then(() => {
   hardenSession();
   registerIpcHandlers();
 
-  const mainWindow = createMainWindow();
+  mainWindow = createMainWindow();
+  if (secondInstanceNeedsFocus) {
+    mainWindow.once('ready-to-show', focusMainWindow);
+  }
 
   if (isSelfTestRun) {
     runSelfTest(mainWindow, observedExternalRequests).catch(reportSelfTestFailure);
@@ -411,4 +471,7 @@ void app.whenReady().then(() => {
 
   log('stage 7 ready - application layer + IPC boundary over Firebase Auth REST + Firestore REST');
   log(`firestore target: ${describeFirestoreTarget()} (rules-enforced REST, no SDK, no privileged credentials)`);
+}).catch((error: unknown) => {
+  log(`startup failed: ${error instanceof Error ? error.message : String(error)}`);
+  app.quit();
 });

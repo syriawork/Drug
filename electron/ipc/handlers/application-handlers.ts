@@ -114,6 +114,12 @@ export function createIpcHandlers(options: CreateIpcHandlersOptions): IpcHandler
     [IPC_CHANNELS.orderRequestsSubmit]: guard(async (payload: unknown) => {
       return application.orderRequests.submitPendingRequest(payload);
     }),
+    [IPC_CHANNELS.orderRequestsListUnresolved]: guard(async () => {
+      return application.orderRequests.listUnresolvedOrderRequests();
+    }),
+    [IPC_CHANNELS.orderRequestsResume]: guard(async (payload: unknown) => {
+      return application.orderRequests.resumeOrderRequest(readOperationId(payload));
+    }),
     [IPC_CHANNELS.settingsGet]: guard(async () => application.manager.getSettings()),
     [IPC_CHANNELS.ordersList]: guard(async () => application.manager.listOrderHistoryPage()),
     [IPC_CHANNELS.ordersHistoryLoadMore]: guard(async () => application.manager.loadMoreOrderHistory()),
@@ -142,6 +148,19 @@ export function createIpcHandlers(options: CreateIpcHandlersOptions): IpcHandler
       return application.orderRequests.processOrderRequest(readRequestId(payload));
     }),
   });
+}
+
+function readOperationId(payload: unknown): unknown {
+  if (
+    typeof payload !== 'object'
+    || payload === null
+    || Array.isArray(payload)
+    || Object.keys(payload).length !== 1
+    || !Object.prototype.hasOwnProperty.call(payload, 'operationId')
+  ) {
+    return null;
+  }
+  return (payload as Record<string, unknown>)['operationId'];
 }
 
 /**

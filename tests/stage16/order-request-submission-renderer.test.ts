@@ -97,6 +97,30 @@ describe('Stage 16 employee request submission UI', () => {
     assert.equal(harness.requestSubmitMessage().includes('transport failed'), false);
   });
 
+  it('discovers an unresolved operation after restart and resumes only after an explicit action', async () => {
+    const operation = {
+      operationId: 'saved-operation-1',
+      requestId: 'saved-request-1',
+      status: 'submission_unknown' as const,
+      createdAtIso: '2026-10-01T09:00:00.000Z',
+    };
+    const harness = await openForm({
+      orderRequestsUnresolved: { ok: true, requests: [operation] },
+    });
+
+    assert.equal(harness.unresolvedRequestRows().length, 1);
+    assert.match(harness.unresolvedRequestRows()[0] ?? '', /saved-request-1/);
+    assert.equal(harness.callsTo('orderRequests.resume').length, 0);
+
+    await harness.clickUnresolvedRequestResume(0);
+
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(harness.callsTo('orderRequests.resume')[0]?.args)),
+      [{ operationId: 'saved-operation-1' }],
+    );
+    assert.equal(harness.requestStatusRequestId(), 'رقم الطلب: request-resumed-1');
+  });
+
   it('drops accidental duplicate clicks while submission is in progress', async () => {
     let releaseSubmission: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => {

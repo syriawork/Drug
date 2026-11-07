@@ -71,9 +71,10 @@ export interface OrderRequestsRepository {
    *    payload is built from a fixed key set (see `ALLOWED_CREATE_KEYS`).
    */
   submitPendingRequest(input: {
+    readonly requestId: string;
     readonly uid: string;
     readonly items: readonly OrderItem[];
-  }): Promise<string>;
+  }): Promise<'created' | 'reconciled' | 'identity-conflict'>;
 
   // -------------------------------------------------------- NOT PROVIDED
   //

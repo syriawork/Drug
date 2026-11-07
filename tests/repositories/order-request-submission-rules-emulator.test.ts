@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 
 import { createManagerApplication, type ManagerApplication } from '../../electron/application';
+import { OperationJournal } from '../../electron/journal/operation-journal';
+import { createOperationIdentity } from '../../functions/src/domain/operations';
 import { DomainError } from '../../electron/domain/errors';
 import {
   FirestoreMedicinesRepository,
@@ -15,7 +21,7 @@ import {
   createOrderProcessingTransactionFactory,
 } from '../../electron/repositories';
 import { FirestoreOrderProcessingService } from '../../electron/services/order-processing.service';
-import { FirestoreRestClient } from '../../electron/services/firestore-rest';
+import { FirestoreRestClient, generateAutoId } from '../../electron/services/firestore-rest';
 import { FirestoreTimestamp } from '../../electron/services/firestore-codec';
 import {
   DEMO_PASSWORD,
@@ -41,15 +47,33 @@ let employeeUid = '';
 let pendingUid = '';
 let rivalUid = '';
 const createdPaths: string[] = [];
+const journalDirectories: string[] = [];
 
-function applicationFor(session: ActorSession): ManagerApplication {
+async function applicationFor(session: ActorSession): Promise<ManagerApplication> {
   const context: RepositoryContext = { client: session.client, onWarning: () => undefined };
+  const directory = await mkdtemp(join(tmpdir(), 'drug-manager-stage16-journal-'));
+  journalDirectories.push(directory);
+  const operationJournal = new OperationJournal(join(directory, 'operation-journal'));
+  await operationJournal.initialize();
   return createManagerApplication({
     session: session.authService,
     usersRepository: new FirestoreUsersRepository(context),
     medicinesRepository: new FirestoreMedicinesRepository(context),
     settingsRepository: new FirestoreSettingsRepository(context),
     orderRequestsRepository: new FirestoreOrderRequestsRepository(context),
+    operationJournal,
+    createOrderRequestIdentity: (uid, items) => {
+      const operationId = randomUUID();
+      const requestId = generateAutoId();
+      return {
+        operation: createOperationIdentity(operationId, 'reserve', {
+          orderId: requestId,
+          userId: uid,
+          items,
+        }),
+        requestId,
+      };
+    },
     ordersRepository: new FirestoreOrdersRepository(context),
     stockLogsRepository: new FirestoreStockLogsRepository(context),
     inboundStockTransactionFactory: createInboundStockTransactionFactory(session.client),
@@ -130,6 +154,7 @@ after(async () => {
       ...createdPaths,
     ]);
   }
+  await Promise.all(journalDirectories.map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
 describe('Stage 16 order-request submission against real Firestore Rules', () => {
@@ -139,7 +164,7 @@ describe('Stage 16 order-request submission against real Firestore Rules', () =>
       return;
     }
     const beforeIds = await listRequestIds(admin);
-    const result = await applicationFor(employee).orderRequests.submitPendingRequest({
+    const result = await (await applicationFor(employee)).orderRequests.submitPendingRequest({
       items: [{ medicineId: MEDICINE_ID, quantity: 2 }],
     });
 
@@ -172,7 +197,7 @@ describe('Stage 16 order-request submission against real Firestore Rules', () =>
       context.skip('Firebase emulators are not available');
       return;
     }
-    const result = await applicationFor(admin).orderRequests.submitPendingRequest({
+    const result = await (await applicationFor(admin)).orderRequests.submitPendingRequest({
       items: [{ medicineId: MEDICINE_ID, quantity: 1 }],
     });
     assert.equal(result.ok, true);
@@ -196,6 +221,7 @@ describe('Stage 16 order-request submission against real Firestore Rules', () =>
     });
     const contextForNoAuth: RepositoryContext = { client, onWarning: () => undefined };
     await expectRulesDenied(() => new FirestoreOrderRequestsRepository(contextForNoAuth).submitPendingRequest({
+      requestId: 'stage36a2-noauth-request',
       uid: employeeUid,
       items: [{ medicineId: MEDICINE_ID, medicineName: 'اسم الدواء المخزَّن', quantity: 1 }],
     }));
@@ -208,7 +234,7 @@ describe('Stage 16 order-request submission against real Firestore Rules', () =>
       return;
     }
     const beforeIds = await listRequestIds(admin);
-    const result = await applicationFor(pending).orderRequests.submitPendingRequest({
+    const result = await (await applicationFor(pending)).orderRequests.submitPendingRequest({
       items: [{ medicineId: MEDICINE_ID, quantity: 1 }],
     });
     assert.equal(result.ok, false);
@@ -222,7 +248,7 @@ describe('Stage 16 order-request submission against real Firestore Rules', () =>
       return;
     }
     const beforeIds = await listRequestIds(admin);
-    const applicationResult = await applicationFor(employee).orderRequests.submitPendingRequest({
+    const applicationResult = await (await applicationFor(employee)).orderRequests.submitPendingRequest({
       uid: rivalUid,
       items: [{ medicineId: MEDICINE_ID, quantity: 1 }],
     });
@@ -231,6 +257,7 @@ describe('Stage 16 order-request submission against real Firestore Rules', () =>
 
     const contextForEmployee: RepositoryContext = { client: employee.client, onWarning: () => undefined };
     await expectRulesDenied(() => new FirestoreOrderRequestsRepository(contextForEmployee).submitPendingRequest({
+      requestId: 'stage36a2-rules-denied',
       uid: rivalUid,
       items: [{ medicineId: MEDICINE_ID, medicineName: 'اسم الدواء المخزَّن', quantity: 1 }],
     }));

@@ -49,8 +49,10 @@ export function toDomainError(error: unknown, documentPath: string | null = null
       case 'INVALID_ARGUMENT':
       case 'CONFIGURATION_ERROR':
         return new DomainError('INVALID_INPUT', 'Ø·Ù„Ø¨ Firestore ØºÙŠØ± ØµØ§Ù„Ø­', { documentPath, cause: error });
-      default:
+      case 'NETWORK':
         return new DomainError('TRANSPORT', 'ÙØ´Ù„ Ø§Ù„Ø§ØªØµØ§Ù„ Ø¨Ø®Ø¯Ù…Ø© Firestore', { documentPath, cause: error });
+      case 'UNKNOWN':
+        return new DomainError('UNKNOWN', 'Ø®Ø·Ø£ ØºÙŠØ± Ù…ØªÙˆÙ‚Ø¹ Ø£Ø«Ù†Ø§Ø¡ Ø§Ù„ÙˆØµÙˆÙ„ Ø¥Ù„Ù‰ Firestore', { documentPath, cause: error });
     }
   }
 

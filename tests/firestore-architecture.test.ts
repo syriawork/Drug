@@ -105,7 +105,6 @@ describe('stage 3 dependency policy', () => {
 describe('stage 3 token policy', () => {
   it('never persists a token to disk or to web storage', () => {
     const forbiddenTokens: readonly string[] = [
-      'writeFile',
       'appendFile',
       'localStorage',
       'sessionStorage',
@@ -113,12 +112,21 @@ describe('stage 3 token policy', () => {
       'keytar',
       'safeStorage',
     ];
+    const journalFile = join(electronDir, 'journal', 'operation-journal.ts');
 
     for (const file of mainProcessFiles) {
       const content = readFileSync(file, 'utf8');
       for (const forbidden of forbiddenTokens) {
         assert.equal(content.includes(forbidden), false, `"${forbidden}" found in ${file}`);
       }
+      if (file !== journalFile) {
+        assert.equal(content.includes('writeFile'), false, `"writeFile" found outside the local journal in ${file}`);
+      }
+    }
+
+    const journalSource = readFileSync(journalFile, 'utf8');
+    for (const forbidden of ['idToken', 'refreshToken', 'getAccessToken', 'authService']) {
+      assert.equal(journalSource.includes(forbidden), false, `"${forbidden}" found in the local journal`);
     }
   });
 
@@ -220,10 +228,13 @@ describe('stage 3 emulator laboratory isolation', () => {
     };
 
     assert.equal(labConfig.firestore?.rules, 'firestore.rules');
-    assert.deepEqual(
-      Object.keys(labConfig.emulators ?? {}).sort(),
-      ['auth', 'firestore', 'singleProjectMode', 'ui'].sort(),
-    );
+    const requiredEmulators = ['auth', 'firestore', 'functions', 'eventarc', 'tasks', 'ui', 'singleProjectMode'];
+    for (const emulatorName of requiredEmulators) {
+      assert.ok(
+        Object.prototype.hasOwnProperty.call(labConfig.emulators ?? {}, emulatorName),
+        `emulator '${emulatorName}' must be configured in the lab firebase.json`,
+      );
+    }
     assert.equal(existsSync(join(labDir, 'firestore.rules')), true, 'the lab rules copy must exist');
     assert.equal(existsSync(join(labDir, 'scripts', 'run-emulator-tests.mjs')), true);
     assert.equal(existsSync(join(labDir, 'scripts', 'start.mjs')), true);
@@ -247,4 +258,3 @@ describe('stage 3 documentation', () => {
     }
   });
 });
-

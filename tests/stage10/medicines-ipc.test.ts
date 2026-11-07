@@ -182,6 +182,6 @@ describe('Stage 10 requirement 11: invalid update payloads are refused', () => {
   });
 
   it('keeps the documented API version in step with the preload copy', () => {
-    assert.equal(DRUG_MANAGER_API_VERSION, '0.3.0');
+    assert.equal(DRUG_MANAGER_API_VERSION, '0.4.0');
   });
 });

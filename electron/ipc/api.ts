@@ -20,7 +20,7 @@
 import { IPC_CHANNELS } from './channels';
 
 /** Version of the renderer-facing API surface. Must be bumped when the contract changes. */
-export const DRUG_MANAGER_API_VERSION = '0.3.0';
+export const DRUG_MANAGER_API_VERSION = '0.4.0';
 
 /** Minimal shape of `ipcRenderer.invoke`. */
 export type InvokeFunction = (channel: string, ...args: readonly unknown[]) => Promise<unknown>;
@@ -103,6 +103,14 @@ export function createDrugManagerApi(invoke: InvokeFunction): DrugManagerApi {
       // request metadata are owned by Main and the existing repository.
       submit: async (input: SubmitOrderRequestInput): Promise<ApplicationResult<OrderRequestSubmissionView>> => {
         const response = await invoke(IPC_CHANNELS.orderRequestsSubmit, input);
+        return response as ApplicationResult<OrderRequestSubmissionView>;
+      },
+      listUnresolved: async (): Promise<ApplicationResult<readonly OrderRequestRecoveryView[]>> => {
+        const response = await invoke(IPC_CHANNELS.orderRequestsListUnresolved);
+        return response as ApplicationResult<readonly OrderRequestRecoveryView[]>;
+      },
+      resume: async (input: ResumeOrderRequestInput): Promise<ApplicationResult<OrderRequestSubmissionView>> => {
+        const response = await invoke(IPC_CHANNELS.orderRequestsResume, input);
         return response as ApplicationResult<OrderRequestSubmissionView>;
       },
     },

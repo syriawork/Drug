@@ -100,7 +100,16 @@ interface OrderRequestItemView {
 
 /** Stage 16: the repository-generated id returned after a request is created. */
 interface OrderRequestSubmissionView {
+  readonly operationId: string;
   readonly requestId: string;
+}
+
+/** An unresolved local submission; it can only be resumed by its operation ID. */
+interface OrderRequestRecoveryView {
+  readonly operationId: string;
+  readonly requestId: string;
+  readonly status: 'prepared' | 'submission_unknown' | 'identity_conflict';
+  readonly createdAtIso: string;
 }
 
 /** One `order_requests/{id}` row as the manager queue renders it. */

@@ -127,9 +127,9 @@ export class FakeSession {
    * Used by tests about what happens AFTER authentication, so they do not have
    * to await a sign-in they are not testing.
    */
-  public static signedIn(): FakeSession {
+  public static signedIn(uid = 'uid-admin'): FakeSession {
     const session = new FakeSession();
-    session.state = signedIn();
+    session.state = signedIn({ uid, email: `${uid}@example.com` });
     session.idToken = 'eyJhbGciOiJub25lIn0.eyJ1c2VyX2lkIjoidWlkLWFkbWluIn0.sig';
     session.refreshToken = 'refresh-token-value';
     return session;
@@ -572,17 +572,25 @@ export function inboundStockFactory(
 export class FakeOrderRequestsRepository {
   private readonly seen: number[] = [];
   private readonly statusQueries: OrderRequestStatus[] = [];
-  private readonly submissions: { readonly uid: string; readonly items: readonly OrderItem[] }[] = [];
+  private readonly submissions: {
+    readonly requestId: string;
+    readonly uid: string;
+    readonly items: readonly OrderItem[];
+  }[] = [];
 
   public constructor(
     private readonly requests: readonly OrderRequest[] = [],
     private readonly failure: Error | null = null,
-    private readonly submissionId = 'req-generated-stage16',
+    _submissionId = 'req-generated-stage16',
     private readonly submissionFailure: Error | null = null,
     private readonly submissionGate?: Promise<void>,
   ) {}
 
-  public get submitted(): readonly { readonly uid: string; readonly items: readonly OrderItem[] }[] {
+  public get submitted(): readonly {
+    readonly requestId: string;
+    readonly uid: string;
+    readonly items: readonly OrderItem[];
+  }[] {
     return this.submissions;
   }
 
@@ -624,9 +632,10 @@ export class FakeOrderRequestsRepository {
   }
 
   public async submitPendingRequest(input: {
+    readonly requestId: string;
     readonly uid: string;
     readonly items: readonly OrderItem[];
-  }): Promise<string> {
+  }): Promise<'created' | 'reconciled' | 'identity-conflict'> {
     if (this.submissionFailure !== null) {
       throw this.submissionFailure;
     }
@@ -634,7 +643,7 @@ export class FakeOrderRequestsRepository {
       await this.submissionGate;
     }
     this.submissions.push(input);
-    return this.submissionId;
+    return 'created';
   }
 }
 

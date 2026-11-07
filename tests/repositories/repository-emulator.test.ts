@@ -270,12 +270,14 @@ describe('Stage 5B repositories on the REAL Firestore Emulator (isolated suite)'
 
   describe('writes through the repository', () => {
     it('an approved employee CAN submit, and Firestore stamps requestDate', async (context) => {
-      const requestId = await employeeRepos.requests.submitPendingRequest({
+      const requestId = `stage36a2-${Date.now()}`;
+      const outcome = await employeeRepos.requests.submitPendingRequest({
+        requestId,
         uid: employeeUid,
         items: [{ medicineId: 'repo-med-1', medicineName: 'Ø¨Ø§Ø±Ø§Ø³ÙŠØªØ§Ù…ÙˆÙ„', quantity: 1 }],
       });
 
-      assert.match(requestId, /^[A-Za-z0-9]{20}$/);
+      assert.equal(outcome, 'created');
       const stored = await adminRepos.requests.getOrderRequest(requestId);
       assert.equal(stored?.status, 'pending');
       assert.equal(stored?.uid, employeeUid);
@@ -289,6 +291,7 @@ describe('Stage 5B repositories on the REAL Firestore Emulator (isolated suite)'
     it('a NON-approved employee is DENIED submission, proving isApproved() still governs', async () => {
       await assert.rejects(
         () => pendingRepos.requests.submitPendingRequest({
+          requestId: `stage36a2-denied-${Date.now()}`,
           uid: pendingUid,
           items: [{ medicineId: 'repo-med-1', medicineName: 'x', quantity: 1 }],
         }),

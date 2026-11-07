@@ -30,7 +30,8 @@
  * treat a normal, committed outcome as a malfunction.
  */
 
-import { DomainError } from '../domain/errors';
+import { DomainError, OrderRequestSubmissionError } from '../domain/errors';
+import type { OperationIdentity } from '../../functions/src/domain/operations';
 import { MAX_RAW_ITEMS } from '../domain/order-rules';
 import type { OrderItem } from '../domain/models';
 import type { MedicinesRepository } from '../repositories/contracts/medicines-repository';
@@ -71,11 +72,72 @@ export interface OrderRequestsApplicationServiceOptions {
   readonly orderRequests?: OrderRequestsRepository | undefined;
   /** Stage 16: resolves medicine names from the trusted catalogue before submit. */
   readonly medicines?: MedicinesRepository | undefined;
+  readonly operationJournal?: OrderRequestJournal | undefined;
+  readonly createSubmissionIdentity?: OrderRequestIdentityFactory | undefined;
   readonly auth: AuthStateSource;
   /** Display name for the actor; falls back to the email, then to the uid. */
   readonly actorName?: ((state: SafeAuthState) => string) | undefined;
   readonly onDiagnostic?: ((message: string) => void) | undefined;
 }
+
+export interface OrderRequestJournalRecord {
+  readonly operation: OperationIdentity;
+  readonly lifecycle: {
+    readonly status:
+      | 'prepared'
+      | 'submission_unknown'
+      | 'confirmed'
+      | 'definitively_rejected'
+      | 'identity_conflict'
+      | 'corrupt';
+    readonly createdAt: string;
+    readonly lastAttemptAt: string | null;
+    readonly originalResultReference: string | null;
+  };
+  readonly orderRequest?: {
+    readonly requestId: string;
+    readonly uid: string;
+    readonly requestedItems: readonly { readonly medicineId: string; readonly quantity: number }[];
+    readonly payload: {
+      readonly uid: string;
+      readonly items: readonly OrderItem[];
+      readonly status: 'pending';
+      readonly requestDate: 'SERVER_TIMESTAMP';
+    } | null;
+  };
+}
+
+export interface OrderRequestJournal {
+  prepare(
+    operation: OperationIdentity,
+    orderRequest: {
+      readonly requestId: string;
+      readonly uid: string;
+      readonly requestedItems: readonly { readonly medicineId: string; readonly quantity: number }[];
+    },
+  ): Promise<OrderRequestJournalRecord>;
+  get(operationId: unknown): Promise<OrderRequestJournalRecord | null>;
+  listRecords(): Promise<readonly OrderRequestJournalRecord[]>;
+  setOrderRequestPayload(operationId: unknown, items: readonly OrderItem[]): Promise<OrderRequestJournalRecord>;
+  setStatus(
+    operationId: unknown,
+    status: OrderRequestJournalRecord['lifecycle']['status'],
+    lifecycleUpdates?: {
+      readonly lastAttemptAt?: string | null;
+      readonly originalResultReference?: string | null;
+    },
+  ): Promise<OrderRequestJournalRecord>;
+}
+
+export interface OrderRequestIdentityFactoryResult {
+  readonly operation: OperationIdentity;
+  readonly requestId: string;
+}
+
+export type OrderRequestIdentityFactory = (
+  uid: string,
+  items: readonly { readonly medicineId: string; readonly quantity: number }[],
+) => OrderRequestIdentityFactoryResult;
 
 /** Default actor label: the display name, else the email, else the uid. */
 function defaultActorName(state: SafeAuthState): string {
@@ -92,15 +154,19 @@ export class OrderRequestsApplicationService {
   private readonly orderProcessing: OrderProcessingService;
   private readonly orderRequests: OrderRequestsRepository | undefined;
   private readonly medicines: MedicinesRepository | undefined;
+  private readonly operationJournal: OrderRequestJournal | undefined;
+  private readonly createSubmissionIdentity: OrderRequestIdentityFactory | undefined;
   private readonly auth: AuthStateSource;
   private readonly actorName: (state: SafeAuthState) => string;
   private readonly onDiagnostic: ((message: string) => void) | undefined;
-  private submissionInFlight = false;
+  private readonly inFlightOperations = new Set<string>();
 
   public constructor(options: OrderRequestsApplicationServiceOptions) {
     this.orderProcessing = options.orderProcessing;
     this.orderRequests = options.orderRequests;
     this.medicines = options.medicines;
+    this.operationJournal = options.operationJournal;
+    this.createSubmissionIdentity = options.createSubmissionIdentity;
     this.auth = options.auth;
     this.actorName = options.actorName ?? defaultActorName;
     this.onDiagnostic = options.onDiagnostic;
@@ -119,13 +185,6 @@ export class OrderRequestsApplicationService {
       });
     }
 
-    if (this.submissionInFlight) {
-      return applicationRefusal('VALIDATION_FAILED', {
-        retryable: true,
-        diagnostic: 'ignored a concurrent order-request submission',
-      });
-    }
-
     const state = this.auth.getState();
     if (!state.authenticated || state.uid === null || state.uid.length === 0) {
       return applicationRefusal('AUTHENTICATION_FAILED', {
@@ -135,21 +194,208 @@ export class OrderRequestsApplicationService {
     }
 
     const orderRequests = this.orderRequests;
+    const journal = this.operationJournal;
+    const identityFactory = this.createSubmissionIdentity;
     const medicines = this.medicines;
-    if (orderRequests === undefined || medicines === undefined) {
+    if (orderRequests === undefined || journal === undefined || identityFactory === undefined) {
       return applicationRefusal('INFRASTRUCTURE_FAILURE', {
         retryable: false,
-        diagnostic: 'submitPendingRequest without configured repositories',
+        diagnostic: 'submitPendingRequest without configured repositories or journal',
       });
     }
 
     const uid = state.uid;
-    this.submissionInFlight = true;
+    return attempt(async (): Promise<OrderRequestSubmissionView> => {
+      // Step 1: Generate fresh operation identity and request ID
+      const { operation, requestId } = identityFactory(uid, parsed.items);
+
+      // Step 2: Prepare the journal record durably before any network activity
+      // The journal record is created with status 'prepared'
+      const requestedItems = parsed.items.map((item: any) => ({
+        medicineId: item.medicineId,
+        quantity: item.quantity,
+      }));
+      await journal.prepare(operation, {
+        requestId,
+        uid,
+        requestedItems,
+      });
+
+      // Step 3: Resolve medicine names (this triggers firestore:catalogue-read)
+      // Must happen after journal prepare but before Firestore create
+      const items: { readonly medicineId: string; readonly quantity: number }[] = [];
+      const medicineNameMap = new Map<string, string>();
+      for (const rawItem of parsed.items) {
+        let medicineName = medicineNameMap.get(rawItem.medicineId);
+        if (medicineName === undefined) {
+          const medicine = await medicines!.getMedicine(rawItem.medicineId);
+          if (medicine === null) {
+            // Journal is already in 'prepared' state; we can still fail closed
+            throw new DomainError('NOT_FOUND', `medicine ${rawItem.medicineId} does not exist`);
+          }
+          medicineName = medicine.name;
+          medicineNameMap.set(rawItem.medicineId, medicineName);
+        }
+        items.push(Object.freeze({ medicineId: rawItem.medicineId, quantity: rawItem.quantity }));
+      }
+
+      // Step 4: Store the exact immutable payload in the journal
+      // This includes medicineName snapshots and sets the stage for Firestore create
+      const journalItems: OrderItem[] = items.map((item) => ({
+        medicineId: item.medicineId,
+        medicineName: medicineNameMap.get(item.medicineId) || '',
+        quantity: item.quantity,
+      }));
+      await journal.setOrderRequestPayload(operation.operationId, journalItems);
+
+      // Step 5: Set journal status to submission_unknown before attempting network submission
+      await journal.setStatus(operation.operationId, 'submission_unknown', {
+        lastAttemptAt: new Date().toISOString(),
+      });
+
+      const submissionItems = items.map((item) => ({
+        medicineId: item.medicineId,
+        medicineName: medicineNameMap.get(item.medicineId) || '',
+        quantity: item.quantity,
+      }));
+
+      // Step 7: Attempt creation; the repository owns strict ALREADY_EXISTS reconciliation.
+      let result: 'created' | 'reconciled' | 'identity-conflict';
+      try {
+        result = await orderRequests.submitPendingRequest({
+          requestId,
+          uid,
+          items: submissionItems,
+        });
+      } catch (error: unknown) {
+        if (error instanceof OrderRequestSubmissionError && error.resolution === 'definitive_rejection') {
+          await journal.setStatus(operation.operationId, 'definitively_rejected');
+        }
+        throw error;
+      }
+
+      if (result === 'identity-conflict') {
+        await journal.setStatus(operation.operationId, 'identity_conflict');
+        throw new DomainError('ALREADY_EXISTS', 'The stored request ID belongs to a different submission.');
+      }
+
+      // Step 8: Confirm only after a create or a successful reconciliation read.
+      await journal.setStatus(operation.operationId, 'confirmed', {
+        originalResultReference: `order_requests/${requestId}`,
+      });
+
+      return Object.freeze({ operationId: operation.operationId, requestId });
+    }, this.onDiagnostic);
+  }
+
+  public async listUnresolvedOrderRequests(): Promise<ApplicationResult<readonly OrderRequestRecoveryView[]>> {
+    const state = this.auth.getState();
+    if (!state.authenticated || state.uid === null || state.uid.length === 0) {
+      return applicationRefusal('AUTHENTICATION_FAILED', {
+        retryable: false,
+        diagnostic: 'listUnresolvedOrderRequests without a Main-process session',
+      });
+    }
+    const journal = this.operationJournal;
+    if (journal === undefined) {
+      return applicationRefusal('INFRASTRUCTURE_FAILURE', {
+        retryable: false,
+        diagnostic: 'listUnresolvedOrderRequests without a configured journal',
+      });
+    }
+    return attempt(async () => {
+      const unresolved: OrderRequestRecoveryView[] = [];
+      for (const record of await journal.listRecords()) {
+        const orderRequest = record.orderRequest;
+        if (
+          orderRequest === undefined
+          || orderRequest.uid !== state.uid
+          || (
+            record.lifecycle.status !== 'prepared'
+            && record.lifecycle.status !== 'submission_unknown'
+            && record.lifecycle.status !== 'identity_conflict'
+          )
+        ) {
+          continue;
+        }
+        unresolved.push(Object.freeze({
+          operationId: record.operation.operationId,
+          requestId: orderRequest.requestId,
+          status: record.lifecycle.status,
+          createdAtIso: record.lifecycle.createdAt,
+        }));
+      }
+      return Object.freeze(unresolved);
+    }, this.onDiagnostic);
+  }
+
+  public async resumeOrderRequest(operationIdValue: unknown): Promise<ApplicationResult<OrderRequestSubmissionView>> {
+    const state = this.auth.getState();
+    if (!state.authenticated || state.uid === null || state.uid.length === 0) {
+      return applicationRefusal('AUTHENTICATION_FAILED', {
+        retryable: false,
+        diagnostic: 'resumeOrderRequest without a Main-process session',
+      });
+    }
+    const journal = this.operationJournal;
+    if (journal === undefined) {
+      return applicationRefusal('INFRASTRUCTURE_FAILURE', {
+        retryable: false,
+        diagnostic: 'resumeOrderRequest without a configured journal',
+      });
+    }
+    return attempt(async () => {
+      const record = await journal.get(operationIdValue);
+      if (record === null || record.orderRequest === undefined) {
+        throw new DomainError('NOT_FOUND', 'No resumable order request exists for this operation.');
+      }
+      if (record.orderRequest.uid !== state.uid) {
+        throw new DomainError('NOT_FOUND', 'No resumable order request exists for this operation.');
+      }
+      if (record.lifecycle.status === 'confirmed') {
+        return Object.freeze({
+          operationId: record.operation.operationId,
+          requestId: record.orderRequest.requestId,
+        });
+      }
+      if (
+        record.lifecycle.status !== 'prepared'
+        && record.lifecycle.status !== 'submission_unknown'
+      ) {
+        throw new DomainError('INVALID_INPUT', 'This operation is not in a resumable state.');
+      }
+      return this.submitJournaledOrderRequest(record, state.uid);
+    }, this.onDiagnostic);
+  }
+
+  private async submitJournaledOrderRequest(
+    initialRecord: OrderRequestJournalRecord,
+    uid: string,
+  ): Promise<OrderRequestSubmissionView> {
+    const orderRequests = this.orderRequests;
+    const journal = this.operationJournal;
+    const medicines = this.medicines;
+    const submission = initialRecord.orderRequest;
+    if (!orderRequests || !journal || !submission) {
+      throw new DomainError('UNKNOWN', 'The journaled order request is incomplete.');
+    }
+    if (submission.uid !== uid) {
+      throw new DomainError('NOT_FOUND', 'No resumable order request exists for this operation.');
+    }
+    const operationId = initialRecord.operation.operationId;
+    if (this.inFlightOperations.has(operationId)) {
+      throw new DomainError('ABORTED', 'The same order request is already being attempted.');
+    }
+    this.inFlightOperations.add(operationId);
     try {
-      return await attempt(async (): Promise<OrderRequestSubmissionView> => {
+      let record = initialRecord;
+      if (record.orderRequest?.payload === null) {
+        if (record.lifecycle.status !== 'prepared' || medicines === undefined) {
+          throw new DomainError('UNKNOWN', 'The immutable order-request payload is unavailable for safe recovery.');
+        }
         const names = new Map<string, string>();
         const items: OrderItem[] = [];
-        for (const item of parsed.items) {
+        for (const item of submission.requestedItems) {
           let medicineName = names.get(item.medicineId);
           if (medicineName === undefined) {
             const medicine = await medicines.getMedicine(item.medicineId);
@@ -165,18 +411,38 @@ export class OrderRequestsApplicationService {
             quantity: item.quantity,
           }));
         }
+        record = await journal.setOrderRequestPayload(operationId, items);
+      }
+      const payload = record.orderRequest?.payload;
+      if (payload === null || payload === undefined || payload.uid !== uid) {
+        throw new DomainError('UNKNOWN', 'The immutable order-request payload is invalid.');
+      }
 
-        const requestId = await orderRequests.submitPendingRequest({
-          uid,
-          items: Object.freeze(items),
+      const attemptedAt = new Date().toISOString();
+      await journal.setStatus(operationId, 'submission_unknown', { lastAttemptAt: attemptedAt });
+      let result: 'created' | 'reconciled' | 'identity-conflict';
+      try {
+        result = await orderRequests.submitPendingRequest({
+          requestId: submission.requestId,
+          uid: payload.uid,
+          items: payload.items,
         });
-        if (requestId.length === 0) {
-          throw new Error('order-request repository returned an invalid request id');
+      } catch (error: unknown) {
+        if (error instanceof OrderRequestSubmissionError && error.resolution === 'definitive_rejection') {
+          await journal.setStatus(operationId, 'definitively_rejected');
         }
-        return Object.freeze({ requestId });
-      }, this.onDiagnostic);
+        throw error;
+      }
+      if (result === 'identity-conflict') {
+        await journal.setStatus(operationId, 'identity_conflict');
+        throw new DomainError('ALREADY_EXISTS', 'The stored request ID belongs to a different submission.');
+      }
+      await journal.setStatus(operationId, 'confirmed', {
+        originalResultReference: `order_requests/${submission.requestId}`,
+      });
+      return Object.freeze({ operationId, requestId: submission.requestId });
     } finally {
-      this.submissionInFlight = false;
+      this.inFlightOperations.delete(operationId);
     }
   }
 

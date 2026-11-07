@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 
 import { DEFAULT_FIRESTORE_DATABASE_ID, type FirestoreRestConfig } from '../../electron/config/firestore-config';
-import { DomainError } from '../../electron/domain/errors';
+import { DomainError, OrderRequestSubmissionError } from '../../electron/domain/errors';
 import { FirestoreTimestamp, encodeFields } from '../../electron/services/firestore-codec';
 import { FirestoreRestClient } from '../../electron/services/firestore-rest';
 import { FirestoreMedicinesRepository, FirestoreSettingsRepository } from '../../electron/repositories/firestore/medicines-repository';
@@ -292,12 +292,14 @@ describe('Stage 5B/M: submitPendingRequest satisfies the rules create clause', (
   it('commits a create with exactly the four allowed keys and a REQUEST_TIME transform', async () => {
     const { repositories, captured } = createClient(() => COMMIT_OK);
 
-    const requestId = await repositories.requests.submitPendingRequest({
+    const requestId = 'request-stable-test-1';
+    const outcome = await repositories.requests.submitPendingRequest({
+      requestId,
       uid: 'u1',
       items: [{ medicineId: 'm1', medicineName: 'x', quantity: 2 }],
     });
 
-    assert.match(requestId, /^[A-Za-z0-9]{20}$/, 'a Firestore-style 20-character id is generated');
+    assert.equal(outcome, 'created');
 
     const body = JSON.parse(captured[0]?.body ?? '{}') as {
       writes: Array<{
@@ -321,13 +323,189 @@ describe('Stage 5B/M: submitPendingRequest satisfies the rules create clause', (
     assert.ok(write?.update.name.endsWith(`/documents/order_requests/${requestId}`), write?.update.name);
   });
 
+  it('reconciles ALREADY_EXISTS only after strict raw validation, preserving duplicate item lines', async () => {
+    const requestId = 'stable-request-duplicate-lines';
+    const existing = documentBody(`order_requests/${requestId}`, {
+      uid: 'u1',
+      status: 'processed',
+      requestDate: FirestoreTimestamp.fromDate(new Date('2021-01-01T00:00:00.000Z')),
+      items: [
+        { medicineId: 'm1', medicineName: 'renamed display snapshot', quantity: 1 },
+        { medicineId: 'm1', medicineName: 'another display snapshot', quantity: 1 },
+      ],
+    });
+    const { repositories, captured } = createClient((request) => request.method === 'POST'
+      ? { status: 409, body: { error: { status: 'ALREADY_EXISTS', message: 'exists' } } }
+      : { status: 200, body: existing });
+
+    const outcome = await repositories.requests.submitPendingRequest({
+      requestId,
+      uid: 'u1',
+      items: [
+        { medicineId: 'm1', medicineName: 'current catalogue name', quantity: 1 },
+        { medicineId: 'm1', medicineName: 'current catalogue name', quantity: 1 },
+      ],
+    });
+
+    assert.equal(outcome, 'reconciled');
+    assert.deepEqual(captured.map((request) => request.method), ['POST', 'GET']);
+  });
+
+  it('accepts each supported existing order-request status and never compares requestDate to the client clock', async () => {
+    for (const status of ['pending', 'processed', 'failed']) {
+      const requestId = `stable-status-${status}`;
+      const { repositories } = createClient((request) => request.method === 'POST'
+        ? { status: 409, body: { error: { status: 'ALREADY_EXISTS', message: 'exists' } } }
+        : {
+          status: 200,
+          body: documentBody(`order_requests/${requestId}`, {
+            uid: 'u1',
+            status,
+            requestDate: FirestoreTimestamp.fromDate(new Date('2001-01-01T00:00:00.000Z')),
+            items: [{ medicineId: 'm1', medicineName: 'snapshot', quantity: 2 }],
+          }),
+        });
+
+      assert.equal(await repositories.requests.submitPendingRequest({
+        requestId,
+        uid: 'u1',
+        items: [{ medicineId: 'm1', medicineName: 'snapshot', quantity: 2 }],
+      }), 'reconciled');
+    }
+  });
+
+  it('marks a different UID or item multiset as an identity conflict', async () => {
+    const cases = [
+      {
+        uid: 'u2',
+        storedItems: [{ medicineId: 'm1', medicineName: 'x', quantity: 2 }],
+        submittedItems: [{ medicineId: 'm1', medicineName: 'x', quantity: 2 }],
+      },
+      {
+        uid: 'u1',
+        storedItems: [{ medicineId: 'm2', medicineName: 'x', quantity: 2 }],
+        submittedItems: [{ medicineId: 'm1', medicineName: 'x', quantity: 2 }],
+      },
+      {
+        uid: 'u1',
+        storedItems: [
+          { medicineId: 'm1', medicineName: 'x', quantity: 2 },
+          { medicineId: 'm1', medicineName: 'x', quantity: 2 },
+        ],
+        submittedItems: [{ medicineId: 'm1', medicineName: 'x', quantity: 2 }],
+      },
+      {
+        uid: 'u1',
+        storedItems: [{ medicineId: 'm1', medicineName: 'x', quantity: 2 }],
+        submittedItems: [
+          { medicineId: 'm1', medicineName: 'x', quantity: 2 },
+          { medicineId: 'm1', medicineName: 'x', quantity: 2 },
+        ],
+      },
+      {
+        uid: 'u1',
+        storedItems: [{ medicineId: 'm1', medicineName: 'x', quantity: 3 }],
+        submittedItems: [{ medicineId: 'm1', medicineName: 'x', quantity: 2 }],
+      },
+    ];
+    for (const testCase of cases) {
+      const requestId = 'stable-identity-conflict';
+      const { repositories } = createClient((request) => request.method === 'POST'
+        ? { status: 409, body: { error: { status: 'ALREADY_EXISTS', message: 'exists' } } }
+        : {
+          status: 200,
+          body: documentBody(`order_requests/${requestId}`, {
+            uid: testCase.uid,
+            status: 'pending',
+            requestDate: FirestoreTimestamp.fromDate(new Date('2020-01-01T00:00:00.000Z')),
+            items: testCase.storedItems,
+          }),
+        });
+      assert.equal(await repositories.requests.submitPendingRequest({
+        requestId,
+        uid: 'u1',
+        items: testCase.submittedItems,
+      }), 'identity-conflict');
+    }
+  });
+
+  it('fails closed on unknown status, malformed documents, or invalid requestDate', async () => {
+    const invalidDocuments = [
+      { uid: 'u1', status: 'mystery', requestDate: FirestoreTimestamp.fromDate(new Date()), items: [{ medicineId: 'm1', medicineName: 'x', quantity: 1 }] },
+      { uid: 'u1', status: 'pending', items: [{ medicineId: 'm1', medicineName: 'x', quantity: 1 }] },
+      { uid: 'u1', status: 'pending', requestDate: null, items: [{ medicineId: 'm1', medicineName: 'x', quantity: 1 }] },
+      { uid: 'u1', status: 'pending', requestDate: '2026-01-01', items: [{ medicineId: 'm1', medicineName: 'x', quantity: 1 }] },
+      { uid: 'u1', status: 'pending', requestDate: { seconds: '1767225600', nanos: 0 }, items: [{ medicineId: 'm1', medicineName: 'x', quantity: 1 }] },
+      { uid: 'u1', status: 'pending', requestDate: FirestoreTimestamp.fromDate(new Date()), items: [{ medicineId: 'm1', medicineName: 'x', quantity: 1 }], unexpected: true },
+    ];
+    for (const data of invalidDocuments) {
+      const requestId = 'stable-malformed-existing';
+      const { repositories } = createClient((request) => request.method === 'POST'
+        ? { status: 409, body: { error: { status: 'ALREADY_EXISTS', message: 'exists' } } }
+        : { status: 200, body: documentBody(`order_requests/${requestId}`, data) });
+      await assert.rejects(
+        () => repositories.requests.submitPendingRequest({
+          requestId,
+          uid: 'u1',
+          items: [{ medicineId: 'm1', medicineName: 'x', quantity: 1 }],
+        }),
+        (error: unknown) => error instanceof DomainError && error.kind === 'MALFORMED_DATA',
+      );
+    }
+  });
+
+  it('keeps an ALREADY_EXISTS read failure unresolved rather than converting it into a rejection', async () => {
+    const { repositories } = createClient((request) => request.method === 'POST'
+      ? { status: 409, body: { error: { status: 'ALREADY_EXISTS', message: 'exists' } } }
+      : { status: 503, body: { error: { status: 'UNAVAILABLE', message: 'offline' } } });
+
+    await assert.rejects(
+      () => repositories.requests.submitPendingRequest({
+        requestId: 'stable-read-failure',
+        uid: 'u1',
+        items: [{ medicineId: 'm1', medicineName: 'x', quantity: 1 }],
+      }),
+      (error: unknown) => error instanceof DomainError && error.kind === 'UNKNOWN',
+    );
+  });
+
+  it('preserves ABORTED, FAILED_PRECONDITION, and permission-denied classifications', async () => {
+    const cases = [
+      { reason: 'ABORTED', status: 409, kind: 'ABORTED', resolution: 'unknown' },
+      { reason: 'FAILED_PRECONDITION', status: 412, kind: 'PRECONDITION_FAILED', resolution: 'definitive_rejection' },
+      { reason: 'PERMISSION_DENIED', status: 403, kind: 'NOT_AUTHORIZED', resolution: 'definitive_rejection' },
+    ] as const;
+    for (const testCase of cases) {
+      const { repositories } = createClient(() => ({
+        status: testCase.status,
+        body: { error: { status: testCase.reason, message: testCase.reason } },
+      }));
+      await assert.rejects(
+        () => repositories.requests.submitPendingRequest({
+          requestId: `stable-${testCase.reason.toLowerCase()}`,
+          uid: 'u1',
+          items: [{ medicineId: 'm1', medicineName: 'x', quantity: 1 }],
+        }),
+        (error: unknown) => (
+          error instanceof OrderRequestSubmissionError
+          && error.kind === testCase.kind
+          && error.resolution === testCase.resolution
+        ),
+      );
+    }
+  });
+
   it('translates a rules rejection into NOT_AUTHORIZED', async () => {
     const { repositories } = createClient(() => ({
       status: 403, body: { error: { code: 403, status: 'PERMISSION_DENIED', message: 'not approved' } },
     }));
 
     await assert.rejects(
-      () => repositories.requests.submitPendingRequest({ uid: 'u1', items: [] }),
+      () => repositories.requests.submitPendingRequest({
+        requestId: 'request-stable-test-2',
+        uid: 'u1',
+        items: [],
+      }),
       (error: unknown) => error instanceof DomainError && error.kind === 'NOT_AUTHORIZED',
     );
   });

@@ -274,6 +274,8 @@ export interface FakeBackendOptions {
   readonly throwOnOrderRequestsGet?: boolean;
   // ---- Stage 16: employee order-request submission ----
   readonly orderRequestSubmit?: { readonly ok: boolean; readonly requestId?: string; readonly error?: { readonly code: string; readonly message: string; readonly retryable: boolean } };
+  readonly orderRequestsUnresolved?: { readonly ok: boolean; readonly requests?: readonly unknown[]; readonly error?: { readonly code: string; readonly message: string; readonly retryable: boolean } };
+  readonly orderRequestResume?: { readonly ok: boolean; readonly requestId?: string; readonly error?: { readonly code: string; readonly message: string; readonly retryable: boolean } };
   readonly orderRequestSubmitGate?: Promise<void>;
   readonly throwOnOrderRequestSubmit?: boolean;
   readonly ordersProcess?: { readonly ok: boolean; readonly outcome?: unknown; readonly error?: { readonly code: string; readonly message: string; readonly retryable: boolean } };
@@ -464,6 +466,9 @@ clickSettingsSave(): Promise<void>;
   requestStatusState(): string;
   requestStatusRequestId(): string;
   requestStatusMessage(): string;
+  unresolvedRequestRows(): readonly string[];
+  clickUnresolvedRequestResume(index: number): Promise<void>;
+  refreshUnresolvedRequests(): Promise<void>;
   // ---- Stage 12: the read-only orders-history module ----
   /** Opens the history page and settles the load it triggers. */
   openOrdersHistory(): Promise<void>;
@@ -708,7 +713,7 @@ function statusPayload(): unknown {
     heading: 'حالة التطبيق',
     label: 'يعمل',
     appName: 'drug-manager',
-    version: '0.3.0',
+    version: '0.4.0',
     electronVersion: '44.4.5',
     nodeVersion: '24.19.0',
     locale: 'ar',
@@ -839,7 +844,7 @@ export async function createRendererHarness(
   let currentUsers: readonly unknown[] = options.usersList?.users ?? [];
 
   const bridge = {
-    apiVersion: '0.3.0',
+    apiVersion: '0.4.0',
     getAppStatus: async (): Promise<unknown> => {
       record('getAppStatus');
       return statusPayload();
@@ -1019,7 +1024,41 @@ export async function createRendererHarness(
             error: answer.error ?? { code: 'AUTHORIZATION_DENIED', message: 'غير مصرح', retryable: false },
           };
         }
-        return { ok: true, value: { requestId: answer?.requestId ?? 'request-created-1' } };
+        return {
+          ok: true,
+          value: {
+            operationId: 'operation-created-1',
+            requestId: answer?.requestId ?? 'request-created-1',
+          },
+        };
+      },
+      listUnresolved: async (): Promise<unknown> => {
+        record('orderRequests.listUnresolved');
+        const answer = options.orderRequestsUnresolved;
+        if (answer?.ok === false) {
+          return {
+            ok: false,
+            error: answer.error ?? { code: 'INTERNAL_ERROR', message: 'خطأ', retryable: false },
+          };
+        }
+        return { ok: true, value: answer?.requests ?? [] };
+      },
+      resume: async (input: unknown): Promise<unknown> => {
+        record('orderRequests.resume', input);
+        const answer = options.orderRequestResume;
+        if (answer?.ok === false) {
+          return {
+            ok: false,
+            error: answer.error ?? { code: 'INTERNAL_ERROR', message: 'خطأ', retryable: false },
+          };
+        }
+        return {
+          ok: true,
+          value: {
+            operationId: (input as Record<string, unknown> | undefined)?.['operationId'] ?? 'operation-resumed',
+            requestId: answer?.requestId ?? 'request-resumed-1',
+          },
+        };
       },
     },
     // Stage 13: the settings read. Argument-free, exactly like the real bridge.
@@ -1525,6 +1564,21 @@ export async function createRendererHarness(
     requestStatusState: (): string => element('request-status-panel').getAttribute('data-view-state') ?? '',
     requestStatusRequestId: (): string => element('request-status-request-id').textContent,
     requestStatusMessage: (): string => element('request-status-message').textContent,
+    unresolvedRequestRows: (): readonly string[] => element('request-recovery-items').children
+      .map((row) => row.children.map((child) => child.textContent).join(' ')),
+    clickUnresolvedRequestResume: async (index: number): Promise<void> => {
+      const row = element('request-recovery-items').children[index];
+      const button = row?.children.find((child) => child.tagName === 'BUTTON');
+      if (button === undefined) {
+        throw new Error(`unresolved request row ${index} has no resume button`);
+      }
+      button.dispatchEvent(new FakeEvent('click'));
+      await settle();
+    },
+    refreshUnresolvedRequests: async (): Promise<void> => {
+      element('request-recovery-refresh').dispatchEvent(new FakeEvent('click'));
+      await settle();
+    },
     // ---- Stage 12: the read-only orders-history module ----
     openOrdersHistory: async (): Promise<void> => {
       const button = document.querySelectorAll('[data-view]')

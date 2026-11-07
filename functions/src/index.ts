@@ -218,6 +218,105 @@ function monthYearFor(date: Date): string {
   return `${month}-${year}`;
 }
 
+const TEST_CLOCK_COLLECTION = 'testClocks';
+
+const STRICT_ISO_REGEX = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|([+-])(\d{2}):(\d{2}))$/;
+
+function isLeapYear(year: number): boolean {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) {
+    return isLeapYear(year) ? 29 : 28;
+  }
+  return [31, 0, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1] ?? 0;
+}
+
+function parseStrictIsoTimestamp(value: string): Date | null {
+  const match = STRICT_ISO_REGEX.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1] ?? '0');
+  const month = Number(match[2] ?? '0');
+  const day = Number(match[3] ?? '0');
+  const hour = Number(match[4] ?? '0');
+  const minute = Number(match[5] ?? '0');
+  const second = Number(match[6] ?? '0');
+  const tzHour = Number(match[10] ?? '00');
+  const tzMinute = Number(match[11] ?? '00');
+
+  // Reject year 0000.
+  if (year === 0) {
+    return null;
+  }
+
+  // Reject invalid month/day.
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) {
+    return null;
+  }
+
+  // Reject invalid time components.
+  if (hour > 23 || minute > 59 || second > 59) {
+    return null;
+  }
+
+  // Reject invalid timezone offset (max +/-14:00; if hour is 14, minutes must be 00).
+  if (tzHour > 14 || (tzHour === 14 && tzMinute > 0) || tzMinute > 59) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
+async function resolveTestClock(uid: string): Promise<Date | null> {
+  if (process.env['FUNCTIONS_EMULATOR'] !== 'true') {
+    return null;
+  }
+  const doc = await firestore.collection(TEST_CLOCK_COLLECTION).doc(uid).get();
+  if (!doc.exists) {
+    return null;
+  }
+  const data = doc.data();
+  const isoTime = typeof data?.['isoTime'] === 'string' ? data['isoTime'] : '';
+  const parsed = parseStrictIsoTimestamp(isoTime);
+  return parsed;
+}
+
+export const setTestClock = onCall(async (request) => {
+  if (process.env['FUNCTIONS_EMULATOR'] !== 'true') {
+    throw new HttpsError('failed-precondition', 'Test clock is available only in the Functions emulator.');
+  }
+  const caller = await authorization.requireApprovedEmployee(request);
+  const data = isPlainObject(request.data) ? request.data : {};
+  const isoTime = typeof data['isoTime'] === 'string' ? data['isoTime'] : '';
+  const parsed = parseStrictIsoTimestamp(isoTime);
+  if (!parsed) {
+    throw new HttpsError('invalid-argument', 'isoTime must be a strict ISO 8601 timestamp with explicit timezone (Z or ±HH:MM).');
+  }
+  await firestore.collection(TEST_CLOCK_COLLECTION).doc(caller.uid).set({
+    isoTime,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return { ok: true };
+});
+
+export const clearTestClock = onCall(async (request) => {
+  if (process.env['FUNCTIONS_EMULATOR'] !== 'true') {
+    throw new HttpsError('failed-precondition', 'Test clock is available only in the Functions emulator.');
+  }
+  const caller = await authorization.requireApprovedEmployee(request);
+  await firestore.collection(TEST_CLOCK_COLLECTION).doc(caller.uid).delete();
+  return { ok: true };
+});
+
 function validateEligibility(
   profile: Record<string, unknown>,
   now: Date,
@@ -343,6 +442,14 @@ export const submitOrder = onCall(async (request) =>
     const settingsRef = firestore.collection('settings').doc('app');
     const userRef = firestore.collection('users').doc(caller.uid);
 
+    let now: Date;
+    if (process.env['FUNCTIONS_EMULATOR'] === 'true') {
+      const resolvedClock = await resolveTestClock(caller.uid);
+      now = resolvedClock ?? new Date();
+    } else {
+      now = new Date();
+    }
+
     const result = await firestore.runTransaction(async (transaction) => {
       const submissionSnapshot = await transaction.get(submissionRef);
       if (submissionSnapshot.exists) {
@@ -360,7 +467,6 @@ export const submitOrder = onCall(async (request) =>
       const profile = (userSnapshot.data() ?? {}) as Record<string, unknown>;
       const settingsSnapshot = await transaction.get(settingsRef);
       const settings = readSettingsDocument(settingsSnapshot.exists ? settingsSnapshot.data() : null);
-      const now = new Date();
       validateEligibility(profile, now, settings);
 
       const medicineUpdates = new Map<string, { readonly stockBefore: number; readonly reservedStockBefore: number; readonly requestedQuantity: number; readonly stockAfter: number; readonly reservedStockAfter: number; readonly inventory: InventoryRecord; readonly medicineName: string; }>();

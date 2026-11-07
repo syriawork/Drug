@@ -61,6 +61,7 @@
     "test:stage21": "npm run build && node --test dist/tests/stage21/personal-order-history-print-renderer.test.js",
     "test:stage22": "npm run build && node --test dist/tests/stage22/orders-history-print-renderer.test.js",
     "test:stage23": "npm run build && node --test dist/tests/stage23/orders-history-pagination-rest-repository.test.js dist/tests/stage23/orders-history-pagination-application.test.js dist/tests/stage23/orders-history-pagination-ipc.test.js dist/tests/stage23/orders-history-pagination-renderer.test.js",
+    "test:stage36a2": "npm run build:node && node --test dist/tests/stage36a2/operation-journal.test.js dist/tests/firestore-architecture.test.js",
     "test:emulator:stage19": "npm run build && node --test dist/tests/repositories/order-stock-movements-rules-emulator.test.js",
     "emulator:test:stage19": "node emulator-lab/scripts/run-stage19-emulator-tests.mjs"
   },
@@ -79,6 +80,7 @@
     },
     "files": [
       "dist/electron/**/*",
+      "dist/functions/src/domain/operations.js",
       "dist/renderer/**/*",
       "!**/*.map",
       "!**/*.test.js",
