@@ -325,8 +325,8 @@ describe('Stage 11 requirement 17: the renderer holds no Stage 6 algorithm', () 
 
   it('sends exactly one field to the process operation: the request id', () => {
     // The load-bearing claim of this stage. If `orders.process` were ever called
-    // with anything but an id, the renderer could steer a transaction - which is
-    // precisely what Stage 6 exists to prevent.
+    // with anything but an id, the renderer could steer administrative order
+    // processing - which is precisely what Stage 6 exists to prevent.
     const code = readCode(join('src', 'renderer', 'renderer.ts'));
     const calls = [...code.matchAll(/orders\.process\(\s*\{([^}]*)\}/g)].map((match) => match[1] ?? '');
 
@@ -337,13 +337,27 @@ describe('Stage 11 requirement 17: the renderer holds no Stage 6 algorithm', () 
     }
   });
 
+  it('keeps recovery reads payload-free and resubmission limited to one operation id', () => {
+    const code = readCode(join('src', 'renderer', 'renderer.ts'));
+    const unresolvedReads = [...code.matchAll(/api\.orderrequests\.listunresolved\(\s*\)/g)];
+    const resumeCalls = [...code.matchAll(/api\.orderrequests\.resume\(\s*\{([^}]*)\}/g)];
+
+    assert.equal(unresolvedReads.length, 1, 'recovery listing must use the named read without a payload');
+    assert.equal(resumeCalls.length, 1, 'recovery must resume through the named operation');
+    for (const match of resumeCalls) {
+      const body = match[1] ?? '';
+      const keys = [...body.matchAll(/(\w+)\s*:/g)].map((key) => key[1] ?? '').sort();
+      assert.deepEqual(keys, ['operationid'], `resumption may name only its journal operation: ${body.trim()}`);
+    }
+  });
+
   it('reaches the orders module only through its named operations', () => {
     const code = readCode(join('src', 'renderer', 'renderer.ts'));
 
     // `readCode` lower-cases, so the extracted operations are lower-case too.
     const used = [...code.matchAll(/api\.(\w+)\.(\w+)\(/g)].map((match) => `${match[1]}.${match[2]}`);
-    // Stage 16 adds only the named employee submission operation. Processing
-    // remains the distinct Stage 11 operation; no generic write is allowed.
+    // Ordinary submissions, journal recovery, and administrative processing
+    // remain distinct named operations, with no generic write.
     //
     // Stage 23 adds `orders.loadmore`, the READ-ONLY operation that continues
     // the Main-owned history cursor. It is a read, so the namespace still holds
@@ -352,6 +366,8 @@ describe('Stage 11 requirement 17: the renderer holds no Stage 6 algorithm', () 
       'orderrequests.list',
       'orderrequests.get',
       'orderrequests.submit',
+      'orderrequests.listunresolved',
+      'orderrequests.resume',
       'orders.process',
       'orders.list',
       'orders.loadmore',
@@ -364,7 +380,10 @@ describe('Stage 11 requirement 17: the renderer holds no Stage 6 algorithm', () 
       }
     }
     assert.equal(used.includes('orderrequests.get'), true, 'the single-request read must be used');
-    assert.equal(used.includes('orders.process'), true, 'processing must be used');
+    assert.equal(used.includes('orderrequests.submit'), true, 'ordinary submissions must use their own operation');
+    assert.equal(used.includes('orderrequests.listunresolved'), true, 'recovery listing must use its own read');
+    assert.equal(used.includes('orderrequests.resume'), true, 'resubmission must use its own operation');
+    assert.equal(used.includes('orders.process'), true, 'administrative processing must remain separate');
     assert.equal(used.includes('orders.list'), true, 'the history read must be used');
   });
 });
