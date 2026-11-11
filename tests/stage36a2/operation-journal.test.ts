@@ -398,8 +398,10 @@ describe('Stage 36A2A operation journal persistence and recovery', () => {
   it('accepts a valid temporary lifecycle update beside a matching final record', async () => {
     const directory = await newDirectory();
     const operation = makeIdentity();
-    const finalRecord = createOperationJournalRecord(operation, 'prepared');
+    const createdAt = '2026-11-06T12:00:00.000Z';
+    const finalRecord = createOperationJournalRecord(operation, 'prepared', { createdAt });
     const temporaryRecord = createOperationJournalRecord(operation, 'confirmed', {
+      createdAt,
       originalResultReference: 'result://temporary-version',
     });
     const finalName = operationFileName(operation.operationId);
