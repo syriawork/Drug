@@ -1,10 +1,10 @@
 /**
  * Stage 11 - the order-requests IPC contract.
  *
- * Stage 11 adds one named READ channel beside the existing process channel, and
- * the interesting question is what the RENDERER is still able to say. For the
- * queue that is "nothing"; for a single request and for processing that is an id
- * and nothing else.
+ * The bridge exposes five order-request operations: reads (`list`, `get`,
+ * `listUnresolved`), ordinary submissions (`submit`) and recovery/resubmission
+ * (`resume`). Administrative processing remains the separate `orders.process`
+ * operation.
  *
  * Each hostile payload below is refused WITHOUT the repository or the engine ever
  * being reached, which is asserted on the fake's own call counters. Asserting only
@@ -20,6 +20,7 @@ import { describe, it } from 'node:test';
 import { DRUG_MANAGER_API_VERSION, createDrugManagerApi } from '../../electron/ipc/api';
 import { IPC_CHANNELS } from '../../electron/ipc/channels';
 import { createIpcHandlers, readRequestId } from '../../electron/ipc/handlers/application-handlers';
+import type { OrderRequestJournal } from '../../electron/application';
 import {
   FakeOrderProcessingService,
   FakeOrderRequestsRepository,
@@ -38,6 +39,28 @@ type Handlers = Readonly<Record<string, ((event: unknown, payload: unknown) => u
  */
 async function invoke(handlers: Handlers, channel: string, payload: unknown): Promise<ApplicationResult<unknown>> {
   return (await handlers[channel]?.({}, payload)) as ApplicationResult<unknown>;
+}
+
+function createRecoveryJournal(calls: { readonly operationIds: unknown[]; listRecords: number }): OrderRequestJournal {
+  return {
+    async prepare() {
+      throw new Error('prepare is not part of this IPC contract test');
+    },
+    async get(operationId) {
+      calls.operationIds.push(operationId);
+      return null;
+    },
+    async listRecords() {
+      calls.listRecords += 1;
+      return [];
+    },
+    async setOrderRequestPayload() {
+      throw new Error('setOrderRequestPayload is not part of this IPC contract test');
+    },
+    async setStatus() {
+      throw new Error('setStatus is not part of this IPC contract test');
+    },
+  };
 }
 
 /**
@@ -79,36 +102,50 @@ const VALID_ID_WITH_EXTRA_FIELDS: readonly unknown[] = [
   { requestId: 'req-1', processedBy: 'uid-somebody-else' },
 ];
 
-describe('Stage 11 requirement 1: the queue and the single read are NAMED channels', () => {
-  it('registers the list, the get and the process channels', () => {
+describe('Stage 11 IPC contract: order-request reads, submissions, and recovery use named channels', () => {
+  it('registers each order-request channel and keeps administrative processing separate', () => {
     assert.equal(IPC_CHANNELS.orderRequestsList, 'drug-manager:order-requests:list');
     assert.equal(IPC_CHANNELS.orderRequestsGet, 'drug-manager:order-requests:get');
+    assert.equal(IPC_CHANNELS.orderRequestsSubmit, 'drug-manager:order-requests:submit');
+    assert.equal(IPC_CHANNELS.orderRequestsListUnresolved, 'drug-manager:order-requests:list-unresolved');
+    assert.equal(IPC_CHANNELS.orderRequestsResume, 'drug-manager:order-requests:resume');
     assert.equal(IPC_CHANNELS.ordersProcess, 'drug-manager:orders:process');
 
     const handlers = createIpcHandlers({ application: buildApplication() });
     assert.equal(typeof handlers[IPC_CHANNELS.orderRequestsList], 'function');
     assert.equal(typeof handlers[IPC_CHANNELS.orderRequestsGet], 'function');
+    assert.equal(typeof handlers[IPC_CHANNELS.orderRequestsSubmit], 'function');
+    assert.equal(typeof handlers[IPC_CHANNELS.orderRequestsListUnresolved], 'function');
+    assert.equal(typeof handlers[IPC_CHANNELS.orderRequestsResume], 'function');
     assert.equal(typeof handlers[IPC_CHANNELS.ordersProcess], 'function');
   });
 
-  it('reaches every operation from the typed bridge, never a channel name', async () => {
-    const channels: string[] = [];
-    const api = createDrugManagerApi(async (channel: string) => {
-      channels.push(channel);
+  it('reaches all five order-request methods with their exact payloads, plus separate processing', async () => {
+    const calls: { readonly channel: string; readonly payloads: readonly unknown[] }[] = [];
+    const api = createDrugManagerApi(async (channel: string, ...payloads: readonly unknown[]) => {
+      calls.push({ channel, payloads });
       return { ok: true, value: null };
     });
 
     await api.orderRequests.list();
     await api.orderRequests.get({ requestId: 'req-1' });
+    await api.orderRequests.submit({ items: [{ medicineId: 'med-1', quantity: 2 }] });
+    await api.orderRequests.listUnresolved();
+    await api.orderRequests.resume({ operationId: 'operation-1' });
     await api.orders.process({ requestId: 'req-1' });
 
-    assert.deepEqual(channels, [
-      IPC_CHANNELS.orderRequestsList,
-      IPC_CHANNELS.orderRequestsGet,
-      IPC_CHANNELS.ordersProcess,
+    assert.deepEqual(calls, [
+      { channel: IPC_CHANNELS.orderRequestsList, payloads: [] },
+      { channel: IPC_CHANNELS.orderRequestsGet, payloads: [{ requestId: 'req-1' }] },
+      {
+        channel: IPC_CHANNELS.orderRequestsSubmit,
+        payloads: [{ items: [{ medicineId: 'med-1', quantity: 2 }] }],
+      },
+      { channel: IPC_CHANNELS.orderRequestsListUnresolved, payloads: [] },
+      { channel: IPC_CHANNELS.orderRequestsResume, payloads: [{ operationId: 'operation-1' }] },
+      { channel: IPC_CHANNELS.ordersProcess, payloads: [{ requestId: 'req-1' }] },
     ]);
-    // The renderer names an OPERATION. There is no parameter through which either
-    // the channel or the payload shape could be redirected.
+    // The renderer names typed operations, never channels or transport verbs.
     assert.equal(Object.keys(api.orderRequests as object).includes('invoke'), false);
   });
 
@@ -117,10 +154,13 @@ describe('Stage 11 requirement 1: the queue and the single read are NAMED channe
     assert.notEqual(DRUG_MANAGER_API_VERSION.length, 0);
   });
 
-  it('exposes exactly the Stage 11 surface, with no transport verb', () => {
+  it('exposes exactly the five order-request methods, with no transport verb', () => {
     const api = createDrugManagerApi(async () => null) as unknown as Record<string, unknown>;
 
-    assert.deepEqual(Object.keys(api['orderRequests'] as object).sort(), ['get', 'list', 'submit']);
+    assert.deepEqual(
+      Object.keys(api['orderRequests'] as object).sort(),
+      ['get', 'list', 'listUnresolved', 'resume', 'submit'],
+    );
     // Stage 12 adds `orders.list`, the READ-ONLY history read. `process` remains
     // the only WRITE on this namespace - the audit surface added a read, not a
     // second way to change an order.
@@ -132,6 +172,47 @@ describe('Stage 11 requirement 1: the queue and the single read are NAMED channe
     for (const forbidden of ['invoke', 'send', 'sendSync', 'on', 'once', 'postMessage', 'ipcRenderer']) {
       assert.equal(api[forbidden], undefined, `the bridge must not expose ${forbidden}`);
     }
+  });
+});
+
+describe('Stage 11 recovery IPC contract: unresolved reads are unscoped and resume accepts only an operation id', () => {
+  it('lists unresolved recovery operations without accepting renderer-supplied scope', async () => {
+    const calls = { operationIds: [] as unknown[], listRecords: 0 };
+    const handlers = createIpcHandlers({
+      application: buildApplication(undefined, undefined, undefined, undefined, undefined, createRecoveryJournal(calls)),
+    });
+
+    const result = await invoke(handlers, IPC_CHANNELS.orderRequestsListUnresolved, {
+      uid: 'uid-somebody-else',
+      status: 'confirmed',
+    });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.ok ? result.value : null, []);
+    assert.equal(calls.listRecords, 1, 'the recovery read must reach the Main-owned journal');
+    assert.deepEqual(calls.operationIds, [], 'the renderer cannot choose an operation or user scope');
+  });
+
+  it('resumes only the named operation and drops any additional renderer-controlled fields', async () => {
+    const calls = { operationIds: [] as unknown[], listRecords: 0 };
+    const handlers = createIpcHandlers({
+      application: buildApplication(undefined, undefined, undefined, undefined, undefined, createRecoveryJournal(calls)),
+    });
+
+    const missing = await invoke(handlers, IPC_CHANNELS.orderRequestsResume, { operationId: 'operation-1' });
+    const hostile = await invoke(handlers, IPC_CHANNELS.orderRequestsResume, {
+      operationId: 'operation-2',
+      uid: 'uid-somebody-else',
+      requestId: 'request-somebody-else',
+      items: [],
+      status: 'confirmed',
+    });
+
+    assert.equal(missing.ok, false);
+    assert.equal(!missing.ok ? missing.error.code : null, 'NOT_FOUND');
+    assert.equal(hostile.ok, false);
+    assert.equal(!hostile.ok ? hostile.error.code : null, 'NOT_FOUND');
+    assert.deepEqual(calls.operationIds, ['operation-1', null], 'only a sole operationId is forwarded');
   });
 });
 
@@ -207,7 +288,11 @@ describe('Stage 11 requirements 3 & 4: processing forwards an id and nothing els
     const handlers = createIpcHandlers({ application: buildApplication() });
 
     for (const payload of [...UNUSABLE_PAYLOADS, { requestId: 'req-1' }]) {
-      for (const channel of [IPC_CHANNELS.orderRequestsGet, IPC_CHANNELS.ordersProcess]) {
+      for (const channel of [
+        IPC_CHANNELS.orderRequestsGet,
+        IPC_CHANNELS.orderRequestsResume,
+        IPC_CHANNELS.ordersProcess,
+      ]) {
         const result = await handlers[channel]?.({}, payload);
         // A rejected `invoke` would make Electron serialise an internal Error into
         // the page. An envelope cannot.
