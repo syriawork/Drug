@@ -274,12 +274,13 @@ export class OrderRequestsApplicationService {
         throw error;
       }
 
+      // Step 8: Handle create outcomes
       if (result === 'identity-conflict') {
         await journal.setStatus(operation.operationId, 'identity_conflict');
         throw new DomainError('ALREADY_EXISTS', 'The stored request ID belongs to a different submission.');
       }
 
-      // Step 8: Confirm only after a create or a successful reconciliation read.
+      // Step 9: Confirm only after a successful create (no ALREADY_EXISTS).
       await journal.setStatus(operation.operationId, 'confirmed', {
         originalResultReference: `order_requests/${requestId}`,
       });

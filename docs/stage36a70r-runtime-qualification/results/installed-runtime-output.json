@@ -1,0 +1,1122 @@
+{
+  "qualification": "Stage 36A70R Electron SQLite runtime qualification",
+  "runtime": {
+    "electron": "44.4.5",
+    "node": "24.21.0",
+    "sqliteVersionInNode": "3.53.4",
+    "processType": "browser",
+    "execPath": "E:\\programs and applications\\desktop\\drug-manager\\node_modules\\electron\\dist\\electron.exe",
+    "isolatedUserDataPath": "C:\\Users\\ALPHA\\AppData\\Local\\Temp\\stage36a70r-run-6d20b01bee0b4544b9c3300f9f395c06\\user-data",
+    "requestedUserDataPath": "C:\\Users\\ALPHA\\AppData\\Local\\Temp\\stage36a70r-run-6d20b01bee0b4544b9c3300f9f395c06\\user-data"
+  },
+  "status": "PASS",
+  "results": [
+    {
+      "id": "R-01 exact Electron runtime metadata",
+      "status": "PASS",
+      "detail": {
+        "electron": "44.4.5",
+        "node": "24.21.0",
+        "sqliteVersionInNode": "3.53.4",
+        "processType": "browser",
+        "execPath": "E:\\programs and applications\\desktop\\drug-manager\\node_modules\\electron\\dist\\electron.exe",
+        "isolatedUserDataPath": "C:\\Users\\ALPHA\\AppData\\Local\\Temp\\stage36a70r-run-6d20b01bee0b4544b9c3300f9f395c06\\user-data",
+        "requestedUserDataPath": "C:\\Users\\ALPHA\\AppData\\Local\\Temp\\stage36a70r-run-6d20b01bee0b4544b9c3300f9f395c06\\user-data"
+      }
+    },
+    {
+      "id": "R-02 node:sqlite import and DatabaseSync instantiation",
+      "status": "PASS",
+      "detail": {
+        "databaseSyncType": "function",
+        "instanceCreated": true,
+        "queryResult": 1,
+        "databaseSyncMethods": [
+          "aggregate",
+          "applyChangeset",
+          "close",
+          "constructor",
+          "createSession",
+          "createTagStore",
+          "deserialize",
+          "enableDefensive",
+          "enableLoadExtension",
+          "exec",
+          "function",
+          "loadExtension",
+          "location",
+          "open",
+          "prepare",
+          "serialize",
+          "setAuthorizer"
+        ]
+      }
+    },
+    {
+      "id": "R-03 actual SQLite engine version",
+      "status": "PASS",
+      "detail": {
+        "processVersion": "3.53.4",
+        "queryVersion": "3.53.4",
+        "compileOptions": [
+          "ATOMIC_INTRINSICS=1",
+          "COMPILER=clang-23.0.0",
+          "DEFAULT_AUTOVACUUM",
+          "DEFAULT_CACHE_SIZE=-2000",
+          "DEFAULT_FILE_FORMAT=4",
+          "DEFAULT_JOURNAL_SIZE_LIMIT=-1",
+          "DEFAULT_MMAP_SIZE=0",
+          "DEFAULT_PAGE_SIZE=4096",
+          "DEFAULT_PCACHE_INITSZ=20",
+          "DEFAULT_RECURSIVE_TRIGGERS",
+          "DEFAULT_SECTOR_SIZE=4096",
+          "DEFAULT_SYNCHRONOUS=2",
+          "DEFAULT_WAL_AUTOCHECKPOINT=1000",
+          "DEFAULT_WAL_SYNCHRONOUS=2",
+          "DEFAULT_WORKER_THREADS=0",
+          "DIRECT_OVERFLOW_READ",
+          "ENABLE_COLUMN_METADATA",
+          "ENABLE_DBSTAT_VTAB",
+          "ENABLE_FTS3",
+          "ENABLE_FTS3_PARENTHESIS",
+          "ENABLE_FTS5",
+          "ENABLE_GEOPOLY",
+          "ENABLE_MATH_FUNCTIONS",
+          "ENABLE_PERCENTILE",
+          "ENABLE_PREUPDATE_HOOK",
+          "ENABLE_RBU",
+          "ENABLE_RTREE",
+          "ENABLE_SESSION",
+          "MALLOC_SOFT_LIMIT=1024",
+          "MAX_ATTACHED=10",
+          "MAX_COLUMN=2000",
+          "MAX_COMPOUND_SELECT=500",
+          "MAX_DEFAULT_PAGE_SIZE=8192",
+          "MAX_EXPR_DEPTH=1000",
+          "MAX_FUNCTION_ARG=1000",
+          "MAX_LENGTH=1000000000",
+          "MAX_LIKE_PATTERN_LENGTH=50000",
+          "MAX_MMAP_SIZE=0x7fff0000",
+          "MAX_PAGE_COUNT=0xfffffffe",
+          "MAX_PAGE_SIZE=65536",
+          "MAX_SQL_LENGTH=1000000000",
+          "MAX_TRIGGER_DEPTH=1000",
+          "MAX_VARIABLE_NUMBER=32766",
+          "MAX_VDBE_OP=250000000",
+          "MAX_WORKER_THREADS=8",
+          "MUTEX_W32",
+          "SYSTEM_MALLOC",
+          "TEMP_STORE=1",
+          "THREADSAFE=1"
+        ]
+      }
+    },
+    {
+      "id": "R-04 DatabaseSync authorizer API exposure",
+      "status": "PASS",
+      "detail": {
+        "setAuthorizerType": "function"
+      }
+    },
+    {
+      "id": "R-05 authorizer deny, replace, remove, callback actions and prepared statement behavior",
+      "status": "PASS",
+      "detail": {
+        "namedConstantsAvailable": [
+          "SQLITE_CHANGESET_OMIT",
+          "SQLITE_CHANGESET_REPLACE",
+          "SQLITE_CHANGESET_ABORT",
+          "SQLITE_CHANGESET_DATA",
+          "SQLITE_CHANGESET_NOTFOUND",
+          "SQLITE_CHANGESET_CONFLICT",
+          "SQLITE_CHANGESET_CONSTRAINT",
+          "SQLITE_CHANGESET_FOREIGN_KEY",
+          "SQLITE_OK",
+          "SQLITE_DENY",
+          "SQLITE_IGNORE",
+          "SQLITE_CREATE_INDEX",
+          "SQLITE_CREATE_TABLE",
+          "SQLITE_CREATE_TEMP_INDEX",
+          "SQLITE_CREATE_TEMP_TABLE",
+          "SQLITE_CREATE_TEMP_TRIGGER",
+          "SQLITE_CREATE_TEMP_VIEW",
+          "SQLITE_CREATE_TRIGGER",
+          "SQLITE_CREATE_VIEW",
+          "SQLITE_DELETE",
+          "SQLITE_DROP_INDEX",
+          "SQLITE_DROP_TABLE",
+          "SQLITE_DROP_TEMP_INDEX",
+          "SQLITE_DROP_TEMP_TABLE",
+          "SQLITE_DROP_TEMP_TRIGGER",
+          "SQLITE_DROP_TEMP_VIEW",
+          "SQLITE_DROP_TRIGGER",
+          "SQLITE_DROP_VIEW",
+          "SQLITE_INSERT",
+          "SQLITE_PRAGMA",
+          "SQLITE_READ",
+          "SQLITE_SELECT",
+          "SQLITE_TRANSACTION",
+          "SQLITE_UPDATE",
+          "SQLITE_ATTACH",
+          "SQLITE_DETACH",
+          "SQLITE_ALTER_TABLE",
+          "SQLITE_REINDEX",
+          "SQLITE_ANALYZE",
+          "SQLITE_CREATE_VTABLE",
+          "SQLITE_DROP_VTABLE",
+          "SQLITE_FUNCTION",
+          "SQLITE_SAVEPOINT",
+          "SQLITE_COPY",
+          "SQLITE_RECURSIVE"
+        ],
+        "constantsUsed": {
+          "ok": 0,
+          "deny": 1,
+          "insert": 18,
+          "update": 23,
+          "delete": 9,
+          "pragma": 19,
+          "transaction": 22,
+          "savepoint": 32,
+          "attach": 24,
+          "detach": 25,
+          "createTable": 2,
+          "dropTable": 11,
+          "alterTable": 26
+        },
+        "deniedOperations": [
+          {
+            "id": "insert",
+            "result": "DENIED",
+            "error": {
+              "name": "Error",
+              "code": "ERR_SQLITE_ERROR",
+              "message": "not authorized"
+            }
+          },
+          {
+            "id": "update",
+            "result": "DENIED",
+            "error": {
+              "name": "Error",
+              "code": "ERR_SQLITE_ERROR",
+              "message": "not authorized"
+            }
+          },
+          {
+            "id": "delete",
+            "result": "DENIED",
+            "error": {
+              "name": "Error",
+              "code": "ERR_SQLITE_ERROR",
+              "message": "not authorized"
+            }
+          }
+        ],
+        "preparedBeforeAuthorizer": {
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        },
+        "prepareAfterAuthorizer": {
+          "result": "DENIED_DURING_PREPARE",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        },
+        "controlAttempts": [
+          {
+            "id": "pragma-write",
+            "result": "DENIED",
+            "error": {
+              "name": "Error",
+              "code": "ERR_SQLITE_ERROR",
+              "message": "not authorized"
+            }
+          },
+          {
+            "id": "begin",
+            "result": "DENIED",
+            "error": {
+              "name": "Error",
+              "code": "ERR_SQLITE_ERROR",
+              "message": "not authorized"
+            }
+          },
+          {
+            "id": "commit",
+            "result": "DENIED",
+            "error": {
+              "name": "Error",
+              "code": "ERR_SQLITE_ERROR",
+              "message": "not authorized"
+            }
+          },
+          {
+            "id": "rollback",
+            "result": "DENIED",
+            "error": {
+              "name": "Error",
+              "code": "ERR_SQLITE_ERROR",
+              "message": "not authorized"
+            }
+          },
+          {
+            "id": "savepoint",
+            "result": "DENIED",
+            "error": {
+              "name": "Error",
+              "code": "ERR_SQLITE_ERROR",
+              "message": "not authorized"
+            }
+          },
+          {
+            "id": "release",
+            "result": "DENIED",
+            "error": {
+              "name": "Error",
+              "code": "ERR_SQLITE_ERROR",
+              "message": "not authorized"
+            }
+          },
+          {
+            "id": "attach",
+            "result": "DENIED",
+            "error": {
+              "name": "Error",
+              "code": "ERR_SQLITE_ERROR",
+              "message": "not authorized"
+            }
+          },
+          {
+            "id": "detach",
+            "result": "DENIED",
+            "error": {
+              "name": "Error",
+              "code": "ERR_SQLITE_ERROR",
+              "message": "not authorized"
+            }
+          }
+        ],
+        "foreignKeysAfterAttempt": 1,
+        "replacementResult": "ALLOWED",
+        "removalResult": "ALLOWED",
+        "schemaAttempts": [
+          {
+            "id": "create-table",
+            "result": "DENIED",
+            "error": {
+              "name": "Error",
+              "code": "ERR_SQLITE_ERROR",
+              "message": "not authorized"
+            }
+          },
+          {
+            "id": "drop-table",
+            "result": "DENIED",
+            "error": {
+              "name": "Error",
+              "code": "ERR_SQLITE_ERROR",
+              "message": "not authorized"
+            }
+          },
+          {
+            "id": "alter-table",
+            "result": "DENIED",
+            "error": {
+              "name": "Error",
+              "code": "ERR_SQLITE_ERROR",
+              "message": "not authorized"
+            }
+          }
+        ],
+        "schemaActionCalls": [
+          {
+            "actionCode": 18,
+            "argument1": "sqlite_master",
+            "argument2": null,
+            "databaseName": "main",
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 2,
+            "argument1": "denied_schema",
+            "argument2": null,
+            "databaseName": "main",
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 9,
+            "argument1": "sqlite_master",
+            "argument2": null,
+            "databaseName": "main",
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 11,
+            "argument1": "target",
+            "argument2": null,
+            "databaseName": "main",
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 26,
+            "argument1": "main",
+            "argument2": "target",
+            "databaseName": null,
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 21,
+            "argument1": null,
+            "argument2": null,
+            "databaseName": null,
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 20,
+            "argument1": "target",
+            "argument2": "id",
+            "databaseName": "main",
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 20,
+            "argument1": "target",
+            "argument2": "value",
+            "databaseName": "main",
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 20,
+            "argument1": "target",
+            "argument2": "id",
+            "databaseName": "main",
+            "triggerOrView": null
+          }
+        ],
+        "deniedCallbackCalls": [
+          {
+            "actionCode": 18,
+            "argument1": "target",
+            "argument2": null,
+            "databaseName": "main",
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 23,
+            "argument1": "target",
+            "argument2": "value",
+            "databaseName": "main",
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 9,
+            "argument1": "target",
+            "argument2": null,
+            "databaseName": "main",
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 18,
+            "argument1": "target",
+            "argument2": null,
+            "databaseName": "main",
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 18,
+            "argument1": "target",
+            "argument2": null,
+            "databaseName": "main",
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 19,
+            "argument1": "foreign_keys",
+            "argument2": "OFF",
+            "databaseName": null,
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 22,
+            "argument1": "BEGIN",
+            "argument2": null,
+            "databaseName": null,
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 22,
+            "argument1": "COMMIT",
+            "argument2": null,
+            "databaseName": null,
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 22,
+            "argument1": "ROLLBACK",
+            "argument2": null,
+            "databaseName": null,
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 32,
+            "argument1": "BEGIN",
+            "argument2": "s1",
+            "databaseName": null,
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 32,
+            "argument1": "RELEASE",
+            "argument2": "s1",
+            "databaseName": null,
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 24,
+            "argument1": ":memory:",
+            "argument2": null,
+            "databaseName": null,
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 25,
+            "argument1": "extra",
+            "argument2": null,
+            "databaseName": null,
+            "triggerOrView": null
+          },
+          {
+            "actionCode": 19,
+            "argument1": "foreign_keys",
+            "argument2": null,
+            "databaseName": null,
+            "triggerOrView": null
+          }
+        ],
+        "replacementCallbackCalls": [
+          {
+            "actionCode": 18,
+            "argument1": "target",
+            "argument2": null,
+            "databaseName": "main",
+            "triggerOrView": null
+          }
+        ],
+        "finalRows": [
+          {
+            "id": 1,
+            "value": "seed"
+          },
+          {
+            "id": 5,
+            "value": "replacement-authorizer"
+          },
+          {
+            "id": 6,
+            "value": "authorizer-removed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "R-06 independent connections have independent foreign-key and authorizer state",
+      "status": "PASS",
+      "detail": {
+        "sameFile": true,
+        "twoIndependentConnections": true,
+        "connectionAForeignKeys": 1,
+        "connectionBForeignKeys": 0,
+        "authorizerOnAInsert": {
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        },
+        "foreignKeyViolationOnA": {
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "FOREIGN KEY constraint failed"
+          }
+        },
+        "committedRowsOnB": {
+          "parents": [
+            {
+              "id": "b-parent"
+            }
+          ],
+          "children": [
+            {
+              "id": "b-invalid",
+              "parent_id": "missing-parent"
+            }
+          ],
+          "incompleteOrder": {
+            "order_id": "order-incomplete",
+            "commit_id": "missing-commit",
+            "current_revision": 0,
+            "revision_count": 0,
+            "commit_count": 0
+          }
+        },
+        "foreignKeyCheckOnB": [
+          {
+            "table": "orders",
+            "rowid": 1,
+            "parent": "command_commits",
+            "fkid": 0
+          },
+          {
+            "table": "children",
+            "rowid": 1,
+            "parent": "parents",
+            "fkid": 0
+          }
+        ],
+        "authorizerCallsOnA": [
+          {
+            "actionCode": 18,
+            "arg1": "parents",
+            "arg2": null,
+            "databaseName": "main",
+            "triggerOrView": null
+          }
+        ]
+      }
+    }
+  ],
+  "observations": {
+    "sqliteModuleExports": [
+      "DatabaseSync",
+      "Session",
+      "StatementSync",
+      "backup",
+      "constants"
+    ],
+    "sqliteConstantExports": [
+      "SQLITE_ALTER_TABLE",
+      "SQLITE_ANALYZE",
+      "SQLITE_ATTACH",
+      "SQLITE_CHANGESET_ABORT",
+      "SQLITE_CHANGESET_CONFLICT",
+      "SQLITE_CHANGESET_CONSTRAINT",
+      "SQLITE_CHANGESET_DATA",
+      "SQLITE_CHANGESET_FOREIGN_KEY",
+      "SQLITE_CHANGESET_NOTFOUND",
+      "SQLITE_CHANGESET_OMIT",
+      "SQLITE_CHANGESET_REPLACE",
+      "SQLITE_COPY",
+      "SQLITE_CREATE_INDEX",
+      "SQLITE_CREATE_TABLE",
+      "SQLITE_CREATE_TEMP_INDEX",
+      "SQLITE_CREATE_TEMP_TABLE",
+      "SQLITE_CREATE_TEMP_TRIGGER",
+      "SQLITE_CREATE_TEMP_VIEW",
+      "SQLITE_CREATE_TRIGGER",
+      "SQLITE_CREATE_VIEW",
+      "SQLITE_CREATE_VTABLE",
+      "SQLITE_DELETE",
+      "SQLITE_DENY",
+      "SQLITE_DETACH",
+      "SQLITE_DROP_INDEX",
+      "SQLITE_DROP_TABLE",
+      "SQLITE_DROP_TEMP_INDEX",
+      "SQLITE_DROP_TEMP_TABLE",
+      "SQLITE_DROP_TEMP_TRIGGER",
+      "SQLITE_DROP_TEMP_VIEW",
+      "SQLITE_DROP_TRIGGER",
+      "SQLITE_DROP_VIEW",
+      "SQLITE_DROP_VTABLE",
+      "SQLITE_FUNCTION",
+      "SQLITE_IGNORE",
+      "SQLITE_INSERT",
+      "SQLITE_OK",
+      "SQLITE_PRAGMA",
+      "SQLITE_READ",
+      "SQLITE_RECURSIVE",
+      "SQLITE_REINDEX",
+      "SQLITE_SAVEPOINT",
+      "SQLITE_SELECT",
+      "SQLITE_TRANSACTION",
+      "SQLITE_UPDATE"
+    ],
+    "authorizer": {
+      "namedConstantsAvailable": [
+        "SQLITE_CHANGESET_OMIT",
+        "SQLITE_CHANGESET_REPLACE",
+        "SQLITE_CHANGESET_ABORT",
+        "SQLITE_CHANGESET_DATA",
+        "SQLITE_CHANGESET_NOTFOUND",
+        "SQLITE_CHANGESET_CONFLICT",
+        "SQLITE_CHANGESET_CONSTRAINT",
+        "SQLITE_CHANGESET_FOREIGN_KEY",
+        "SQLITE_OK",
+        "SQLITE_DENY",
+        "SQLITE_IGNORE",
+        "SQLITE_CREATE_INDEX",
+        "SQLITE_CREATE_TABLE",
+        "SQLITE_CREATE_TEMP_INDEX",
+        "SQLITE_CREATE_TEMP_TABLE",
+        "SQLITE_CREATE_TEMP_TRIGGER",
+        "SQLITE_CREATE_TEMP_VIEW",
+        "SQLITE_CREATE_TRIGGER",
+        "SQLITE_CREATE_VIEW",
+        "SQLITE_DELETE",
+        "SQLITE_DROP_INDEX",
+        "SQLITE_DROP_TABLE",
+        "SQLITE_DROP_TEMP_INDEX",
+        "SQLITE_DROP_TEMP_TABLE",
+        "SQLITE_DROP_TEMP_TRIGGER",
+        "SQLITE_DROP_TEMP_VIEW",
+        "SQLITE_DROP_TRIGGER",
+        "SQLITE_DROP_VIEW",
+        "SQLITE_INSERT",
+        "SQLITE_PRAGMA",
+        "SQLITE_READ",
+        "SQLITE_SELECT",
+        "SQLITE_TRANSACTION",
+        "SQLITE_UPDATE",
+        "SQLITE_ATTACH",
+        "SQLITE_DETACH",
+        "SQLITE_ALTER_TABLE",
+        "SQLITE_REINDEX",
+        "SQLITE_ANALYZE",
+        "SQLITE_CREATE_VTABLE",
+        "SQLITE_DROP_VTABLE",
+        "SQLITE_FUNCTION",
+        "SQLITE_SAVEPOINT",
+        "SQLITE_COPY",
+        "SQLITE_RECURSIVE"
+      ],
+      "constantsUsed": {
+        "ok": 0,
+        "deny": 1,
+        "insert": 18,
+        "update": 23,
+        "delete": 9,
+        "pragma": 19,
+        "transaction": 22,
+        "savepoint": 32,
+        "attach": 24,
+        "detach": 25,
+        "createTable": 2,
+        "dropTable": 11,
+        "alterTable": 26
+      },
+      "deniedOperations": [
+        {
+          "id": "insert",
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        },
+        {
+          "id": "update",
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        },
+        {
+          "id": "delete",
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        }
+      ],
+      "preparedBeforeAuthorizer": {
+        "result": "DENIED",
+        "error": {
+          "name": "Error",
+          "code": "ERR_SQLITE_ERROR",
+          "message": "not authorized"
+        }
+      },
+      "prepareAfterAuthorizer": {
+        "result": "DENIED_DURING_PREPARE",
+        "error": {
+          "name": "Error",
+          "code": "ERR_SQLITE_ERROR",
+          "message": "not authorized"
+        }
+      },
+      "controlAttempts": [
+        {
+          "id": "pragma-write",
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        },
+        {
+          "id": "begin",
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        },
+        {
+          "id": "commit",
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        },
+        {
+          "id": "rollback",
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        },
+        {
+          "id": "savepoint",
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        },
+        {
+          "id": "release",
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        },
+        {
+          "id": "attach",
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        },
+        {
+          "id": "detach",
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        }
+      ],
+      "foreignKeysAfterAttempt": 1,
+      "replacementResult": "ALLOWED",
+      "removalResult": "ALLOWED",
+      "schemaAttempts": [
+        {
+          "id": "create-table",
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        },
+        {
+          "id": "drop-table",
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        },
+        {
+          "id": "alter-table",
+          "result": "DENIED",
+          "error": {
+            "name": "Error",
+            "code": "ERR_SQLITE_ERROR",
+            "message": "not authorized"
+          }
+        }
+      ],
+      "schemaActionCalls": [
+        {
+          "actionCode": 18,
+          "argument1": "sqlite_master",
+          "argument2": null,
+          "databaseName": "main",
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 2,
+          "argument1": "denied_schema",
+          "argument2": null,
+          "databaseName": "main",
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 9,
+          "argument1": "sqlite_master",
+          "argument2": null,
+          "databaseName": "main",
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 11,
+          "argument1": "target",
+          "argument2": null,
+          "databaseName": "main",
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 26,
+          "argument1": "main",
+          "argument2": "target",
+          "databaseName": null,
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 21,
+          "argument1": null,
+          "argument2": null,
+          "databaseName": null,
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 20,
+          "argument1": "target",
+          "argument2": "id",
+          "databaseName": "main",
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 20,
+          "argument1": "target",
+          "argument2": "value",
+          "databaseName": "main",
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 20,
+          "argument1": "target",
+          "argument2": "id",
+          "databaseName": "main",
+          "triggerOrView": null
+        }
+      ],
+      "deniedCallbackCalls": [
+        {
+          "actionCode": 18,
+          "argument1": "target",
+          "argument2": null,
+          "databaseName": "main",
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 23,
+          "argument1": "target",
+          "argument2": "value",
+          "databaseName": "main",
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 9,
+          "argument1": "target",
+          "argument2": null,
+          "databaseName": "main",
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 18,
+          "argument1": "target",
+          "argument2": null,
+          "databaseName": "main",
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 18,
+          "argument1": "target",
+          "argument2": null,
+          "databaseName": "main",
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 19,
+          "argument1": "foreign_keys",
+          "argument2": "OFF",
+          "databaseName": null,
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 22,
+          "argument1": "BEGIN",
+          "argument2": null,
+          "databaseName": null,
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 22,
+          "argument1": "COMMIT",
+          "argument2": null,
+          "databaseName": null,
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 22,
+          "argument1": "ROLLBACK",
+          "argument2": null,
+          "databaseName": null,
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 32,
+          "argument1": "BEGIN",
+          "argument2": "s1",
+          "databaseName": null,
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 32,
+          "argument1": "RELEASE",
+          "argument2": "s1",
+          "databaseName": null,
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 24,
+          "argument1": ":memory:",
+          "argument2": null,
+          "databaseName": null,
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 25,
+          "argument1": "extra",
+          "argument2": null,
+          "databaseName": null,
+          "triggerOrView": null
+        },
+        {
+          "actionCode": 19,
+          "argument1": "foreign_keys",
+          "argument2": null,
+          "databaseName": null,
+          "triggerOrView": null
+        }
+      ],
+      "replacementCallbackCalls": [
+        {
+          "actionCode": 18,
+          "argument1": "target",
+          "argument2": null,
+          "databaseName": "main",
+          "triggerOrView": null
+        }
+      ],
+      "finalRows": [
+        {
+          "id": 1,
+          "value": "seed"
+        },
+        {
+          "id": 5,
+          "value": "replacement-authorizer"
+        },
+        {
+          "id": 6,
+          "value": "authorizer-removed"
+        }
+      ]
+    },
+    "connectionIsolation": {
+      "sameFile": true,
+      "twoIndependentConnections": true,
+      "connectionAForeignKeys": 1,
+      "connectionBForeignKeys": 0,
+      "authorizerOnAInsert": {
+        "result": "DENIED",
+        "error": {
+          "name": "Error",
+          "code": "ERR_SQLITE_ERROR",
+          "message": "not authorized"
+        }
+      },
+      "foreignKeyViolationOnA": {
+        "result": "DENIED",
+        "error": {
+          "name": "Error",
+          "code": "ERR_SQLITE_ERROR",
+          "message": "FOREIGN KEY constraint failed"
+        }
+      },
+      "committedRowsOnB": {
+        "parents": [
+          {
+            "id": "b-parent"
+          }
+        ],
+        "children": [
+          {
+            "id": "b-invalid",
+            "parent_id": "missing-parent"
+          }
+        ],
+        "incompleteOrder": {
+          "order_id": "order-incomplete",
+          "commit_id": "missing-commit",
+          "current_revision": 0,
+          "revision_count": 0,
+          "commit_count": 0
+        }
+      },
+      "foreignKeyCheckOnB": [
+        {
+          "table": "orders",
+          "rowid": 1,
+          "parent": "command_commits",
+          "fkid": 0
+        },
+        {
+          "table": "children",
+          "rowid": 1,
+          "parent": "parents",
+          "fkid": 0
+        }
+      ],
+      "authorizerCallsOnA": [
+        {
+          "actionCode": 18,
+          "arg1": "parents",
+          "arg2": null,
+          "databaseName": "main",
+          "triggerOrView": null
+        }
+      ]
+    }
+  }
+}

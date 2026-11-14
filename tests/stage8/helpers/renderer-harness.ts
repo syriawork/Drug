@@ -1568,7 +1568,7 @@ export async function createRendererHarness(
       .map((row) => row.children.map((child) => child.textContent).join(' ')),
     clickUnresolvedRequestResume: async (index: number): Promise<void> => {
       const row = element('request-recovery-items').children[index];
-      const button = row?.children.find((child) => child.tagName === 'BUTTON');
+      const button = row?.children.find((child) => child.tagName.toUpperCase() === 'BUTTON');
       if (button === undefined) {
         throw new Error(`unresolved request row ${index} has no resume button`);
       }

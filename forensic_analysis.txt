@@ -1,0 +1,22 @@
+=== FORENSIC ANALYSIS: STAGE 36A2 FAILURES ===
+
+FAILURE 1 — Firestore Architecture
+- Test: firestore-architecture.test.js "keeps Firestore access out of the renderer bundle" (line 131:24)
+- Missing file: dist/renderer/renderer.js
+- Cause: test:stage36a2 runs ONLY npm run build:node, not full build; renderer bundle not generated
+- Classification: environment/build artifact issue (not a genuine defect)
+- HEAD comparison: test source unchanged from HEAD; only 2 pre-existing worktree modifications exist (order-requests.service.ts, renderer-harness.ts), neither related to this test
+
+FAILURE 2 — Operation Journal Lifecycle
+- Test: stage36a2/operation-journal.test.js "accepts a valid temporary lifecycle update beside a matching final record"
+- Error: OperationJournalError: Journal recovery found valid files with conflicting immutable identity for operation journal:operation-1; evidence was preserved.
+- Location: OperationJournal.initializeOnce (compiled JS ~line 577)
+- Cause: Journal finds two valid files with same operation identity during init; fail-closed design preserves evidence (both files kept, update rejected)
+- Classification: test fixture/contract boundary test — by design the journal fail-closes on identity conflicts to preserve evidence
+- HEAD comparison: journal source (electron/journal/operation-journal.ts) unchanged from HEAD; worktree modifications (order-requests.service.ts, renderer-harness.ts) are unrelated
+
+REMEDIATION PLAN (minimal, read-only observations):
+1. Failure 1: This is expected when running test:stage36a2 alone. Full test:stage16 builds renderer bundle and passes all 25 tests.
+2. Failure 2: The "evidence was preserved" behavior is intentional fail-closed design. The related passing test "accepts a final record with an identical valid temporary and retains both files" uses temp-file pattern (.tmp UUID suffix). This failing test likely has two permanent .json files with same identity.
+
+=== END OF FORENSIC ANALYSIS ===
